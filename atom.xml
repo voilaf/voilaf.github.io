@@ -2,7 +2,7 @@
 <feed xmlns="http://www.w3.org/2005/Atom">
     <id>https://voilaf.github.io</id>
     <title>voilaf</title>
-    <updated>2022-03-07T14:20:13.512Z</updated>
+    <updated>2022-03-08T14:11:55.246Z</updated>
     <generator>https://github.com/jpmonette/feed</generator>
     <link rel="alternate" href="https://voilaf.github.io"/>
     <link rel="self" href="https://voilaf.github.io/atom.xml"/>
@@ -56,6 +56,7 @@
 </li>
 </ul>
 </li>
+<li><a href="#%E9%81%BF%E5%85%8D%E5%90%91%E5%A4%B1%E6%B4%BB%E6%89%A7%E8%A1%8C%E5%99%A8%E5%AE%A2%E6%88%B7%E7%AB%AF%E8%B0%83%E5%BA%A6%E4%BB%BB%E5%8A%A1">避免向失活执行器客户端调度任务</a></li>
 </ul>
 </p>
 <h1 id="项目地址">项目地址</h1>
@@ -599,6 +600,29 @@ new LinkedHashMap&lt;String, String&gt;(16, 0.75f, true);
 <li>ringData存在数据，则sleep8秒</li>
 <li>ringThreadToStop设置为true，ringThread线程将退出执行循环，sleep1秒，并join等待ringThread线程执退出</li>
 </ol>
+<h1 id="避免向失活执行器客户端调度任务">避免向失活执行器客户端调度任务</h1>
+<p><strong>背景</strong></p>
+<ul>
+<li>registryMonitorThread线程每隔30秒判断执行器客户端是否已超过90秒未交互心跳包（执行器自动注册），若超过则更新xxl_job_group表的address_list为最新可用的执行器客户端地址。</li>
+<li>执行器客户端退出时，会请求registryRemove接口，清除本身的注册信息</li>
+<li>任务调度时，会根据xxl_job_group表address_list字段值和路由策略选择一个执行器客户端实例<br>
+<strong>假设场景</strong></li>
+<li>执行器客户端刚完成心跳包交互同时退出，但是未请求成功registryRemove接口（也许网络问题或者客户端机器故障，等等）</li>
+<li>registryMonitorThread线程需要起码90秒才能检测出该执行器实例故障<br>
+<strong>关注点</strong></li>
+</ul>
+<ol>
+<li>此时任务调度该机器会如何？<br>
+任务调度会因为该实例访问异常导致请求失败。</li>
+<li>如何让任务最终结果是成功的？<br>
+结合xxl_job_info表executor_fail_retry_count（失败重试次数）、executor_route_strategy（路由策略）两个字段协作处理</li>
+</ol>
+<ul>
+<li>故障转移、忙碌转移两种情况，会分别请求执行器的&quot;/beat&quot;和&quot;/idleBeat&quot;，会相应成功才会调度到该执行器，此时不需要考虑重试次数。</li>
+<li>参考轮询、随机等路由策略，一次调度失败后，根据失败重试次数会重新调度（仍存在可能调度到原失活执行器）</li>
+</ul>
+<p><strong>结论</strong><br>
+根据任务的执行周期，动态调整。如每日执行一次（可选择故障、忙碌转移并增加失败重试次数），如每1分钟执行一次（条件相对自由，若不允许失败，可选择非单机、非最后一个等固定项，并增加失败重试次数）</p>
 <hr>
 <p>xxl-job 社区当前并不活跃，有什么可替换且好用的项目？</p>
 ]]></content>
