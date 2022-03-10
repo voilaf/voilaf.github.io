@@ -1,0 +1,253 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="utf-8" >
+
+<title>nacos-client config杂谈 | voilaf</title>
+
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+
+<link rel="stylesheet" href="https://use.fontawesome.com/releases/v5.7.2/css/all.css" integrity="sha384-fnmOCqbTlWIlj8LyTjo7mOUStjsKC4pOpQbqyi7RrhN7udi9RwhKkMHpvLbHG9Sr" crossorigin="anonymous">
+<link rel="shortcut icon" href="https://voilaf.github.io/favicon.ico?v=1646917993928">
+<link rel="stylesheet" href="https://voilaf.github.io/styles/main.css">
+
+
+
+<link rel="stylesheet" href="https://unpkg.com/aos@next/dist/aos.css" />
+<script src="https://cdn.jsdelivr.net/npm/vue/dist/vue.js"></script>
+
+
+
+    <meta name="description" content="最近看一个项目长轮询的代码，发现逻辑未通顺，没完整闭环，依稀记得nacos-client处有相同实现，重温并且总结。
+注：参考nacos-client 1.x版本
+背景
+
+nacos-client config模块1.x版本基于长轮询实现
+..." />
+    <meta name="keywords" content="" />
+  </head>
+  <body>
+    <div id="app" class="main">
+
+      <div class="sidebar" :class="{ 'full-height': menuVisible }">
+  <div class="top-container" data-aos="fade-right">
+    <div class="top-header-container">
+      <a class="site-title-container" href="https://voilaf.github.io">
+        <img src="https://voilaf.github.io/images/avatar.png?v=1646917993928" class="site-logo">
+        <h1 class="site-title">voilaf</h1>
+      </a>
+      <div class="menu-btn" @click="menuVisible = !menuVisible">
+        <div class="line"></div>
+      </div>
+    </div>
+    <div>
+      
+        
+          <a href="https://voilaf.github.io" class="site-nav">
+            首页
+          </a>
+        
+      
+    </div>
+  </div>
+  <div class="bottom-container" data-aos="flip-up" data-aos-offset="0">
+    <div class="social-container">
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+    </div>
+    <div class="site-description">
+      hhh
+    </div>
+    <div class="site-footer">
+      Powered by <a href="https://github.com/getgridea/gridea" target="_blank">Gridea</a> | <a class="rss" href="https://voilaf.github.io/atom.xml" target="_blank">RSS</a>
+    </div>
+  </div>
+</div>
+
+
+      <div class="main-container">
+        <div class="content-container" data-aos="fade-up">
+          <div class="post-detail">
+            <h2 class="post-title">nacos-client config杂谈</h2>
+            <div class="post-date">2022-03-07</div>
+            
+            <div class="post-content" v-pre>
+              <p>最近看一个项目长轮询的代码，发现逻辑未通顺，没完整闭环，依稀记得nacos-client处有相同实现，重温并且总结。</p>
+<p>注：参考nacos-client 1.x版本</p>
+<h1 id="背景">背景</h1>
+<ul>
+<li>nacos-client config模块1.x版本基于长轮询实现</li>
+<li>ClientWorker类是每个客户端与服务端交互的业务类</li>
+<li>每一个配置文件对应存储映射一个CacheData类，多个CacheData存储在cacheMap（ConcurrentHashMap&lt;String, CacheData&gt; ）</li>
+<li>LongPollingRunnable类顾名思义是长轮询请求服务端，获取配置信息的业务类</li>
+<li>ClientWorker类包含executor和executorService线程池，对应执行LongPollingRunnable类逻辑</li>
+</ul>
+<h1 id="关键部分伪代码">关键部分伪代码</h1>
+<pre><code>public ClientWorker(final HttpAgent agent, final ConfigFilterChainManager configFilterChainManager,
+        final Properties properties) {
+    ......
+
+    this.executor = Executors.newScheduledThreadPool(1, new ThreadFactory() {
+        @Override
+        public Thread newThread(Runnable r) {
+            Thread t = new Thread(r);
+            t.setName(&quot;com.alibaba.nacos.client.Worker.&quot; + agent.getName());
+            t.setDaemon(true);
+            return t;
+        }
+    });
+    
+    this.executorService = Executors
+            .newScheduledThreadPool(Runtime.getRuntime().availableProcessors(), new ThreadFactory() {
+                @Override
+                public Thread newThread(Runnable r) {
+                    Thread t = new Thread(r);
+                    t.setName(&quot;com.alibaba.nacos.client.Worker.longPolling.&quot; + agent.getName());
+                    t.setDaemon(true);
+                    return t;
+                }
+            });
+    
+    this.executor.scheduleWithFixedDelay(new Runnable() {
+        @Override
+        public void run() {
+            try {
+                checkConfigInfo();
+            } catch (Throwable e) {
+                LOGGER.error(&quot;[&quot; + agent.getName() + &quot;] [sub-check] rotate check error&quot;, e);
+            }
+        }
+    }, 1L, 10L, TimeUnit.MILLISECONDS);
+}
+</code></pre>
+<p>创建了两个线程池executor和executorService，executorService作用此时未知，executor则间隔10毫秒，不断持续执行checkConfigInfo方法。</p>
+<p>再来看checkConfigInfo方法</p>
+<pre><code>public void checkConfigInfo() {
+    // Dispatch tasks.
+    int listenerSize = cacheMap.size();
+    // Round up the longingTaskCount.
+    int longingTaskCount = (int) Math.ceil(listenerSize / ParamUtil.getPerTaskConfigSize());
+    if (longingTaskCount &gt; currentLongingTaskCount) {
+        for (int i = (int) currentLongingTaskCount; i &lt; longingTaskCount; i++) {
+            executorService.execute(new LongPollingRunnable(i));
+        }
+        currentLongingTaskCount = longingTaskCount;
+    }
+}
+</code></pre>
+<p>先不考虑细节，我初始单看上面两段，简单的总结：checkConfigInfo方法不停的executor被执行，LongPollingRunnable不停的被创建放到executorService被执行。好吧，其实还有下面一句代码相关，LongPollingRunnable的run方法，不停在重新投递自己到executorService，这不是会导致LongPollingRunnable任务越来越多下去吗?<br>
+当然，看了<a href="https://github.com/alibaba/nacos/issues/4325">https://github.com/alibaba/nacos/issues/4325</a>这里之后很清晰的得知，人家这么设计是有意为之。</p>
+<p>重点在PerTaskConfigSize方法对应的perTaskConfigSize变量，默认值是3000，可通过环境属性修改，计算得到的longingTaskCount大概率都会是1，那么新问题是checkConfigInfo方法的重试意义在哪，而perTaskConfigSize变量又有什么用？</p>
+<p>保留问题，再来看LongPollingRunnable做了什么事情</p>
+<pre><code>class LongPollingRunnable implements Runnable {
+        
+    private final int taskId;
+    
+    public LongPollingRunnable(int taskId) {
+        this.taskId = taskId;
+    }
+    
+    @Override
+    public void run() {
+        
+        List&lt;CacheData&gt; cacheDatas = new ArrayList&lt;CacheData&gt;();
+        List&lt;String&gt; inInitializingCacheList = new ArrayList&lt;String&gt;();
+        try {
+            // check failover config
+            for (CacheData cacheData : cacheMap.values()) {
+                if (cacheData.getTaskId() == taskId) {
+                    cacheDatas.add(cacheData);
+                    ......
+                }
+            }
+            
+            // check server config
+            ......
+            
+            executorService.execute(this);
+                
+        } catch (Throwable e) {
+                
+            // If the rotation training task is abnormal, the next execution time of the task will be punished
+            LOGGER.error(&quot;longPolling error : &quot;, e);
+            executorService.schedule(this, taskPenaltyTime, TimeUnit.MILLISECONDS);
+        }
+    }
+}
+</code></pre>
+<ol>
+<li>从cacheMaps里面获取CacheData列表，需与taskId比对一致</li>
+<li>更新处理每个CacheData对应的配置信息</li>
+<li>重新投递到executorService线程池</li>
+</ol>
+<p>taskId值的来源及作用<br>
+添加CacheData时，判断当前cacheMap的size，并计算对应的taskId</p>
+<pre><code>Public CacheData addCacheDataIfAbsent(String dataId, String group, String tenant)  throws NacosException ｛
+    int taskId = cacheMap.size() / (int) ParamUtil.getPerTaskConfigSize();
+    cacheData.setTaskId(taskId);
+｝
+</code></pre>
+<p>综上所述，每一个CacheData对应一个taskId，LongPollingRunnable业务线程只执行对应taskId的CacheData的更新逻辑。</p>
+<p>checkConfigInfo方法的重试意义<br>
+我能想到的两种可能：</p>
+<ol>
+<li>cacheMap的size太大了，但仍小于3000，所以仅创建一个LongPollingRunnable线程，并轮询堆cacheMap内每个CacheData处理配置更新，可能会导致效率慢，若此时改小perTaskConfigSize值，将调整创建多个LongPollingRunnable线程，每个LongPollingRunnable线程处理的CacheData数量变小，效率变高了。</li>
+<li>cacheMap内的CacheData并不是初始就被创建添加，可能存在一定的延时，所以需要重试直到线程创建完成。</li>
+</ol>
+<p>perTaskConfigSize变量有什么用<br>
+动态调整LongPollingRunnable线程数量。</p>
+<h1 id="综上">综上</h1>
+<p>每隔10毫秒，执行checkConfigInfo方法，判断对应条件，创建LongPollingRunnable线程并执行或不操作。<br>
+LongPollingRunnable线程轮询cacheMap内的CacheData，处理配置数据更新逻辑，执行完成后向线程池自投递并反复执行。</p>
+
+            </div>
+            
+            
+              <div class="next-post">
+                <div class="next">下一篇</div>
+                <a href="https://voilaf.github.io/post/xxl-job-zheng-li-zong-jie/">
+                  <h3 class="post-title">
+                    xxl-job任务调度工具库
+                  </h3>
+                </a>
+              </div>
+            
+
+            
+
+          </div>
+
+        </div>
+      </div>
+    </div>
+
+    <script src="https://unpkg.com/aos@next/dist/aos.js"></script>
+<script type="application/javascript">
+
+AOS.init();
+
+var app = new Vue({
+  el: '#app',
+  data: {
+    menuVisible: false,
+  },
+})
+
+</script>
+
+
+
+
+
+
+  </body>
+</html>
