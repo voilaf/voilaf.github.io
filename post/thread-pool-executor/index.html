@@ -1,0 +1,534 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="utf-8" >
+
+<title>thread-pool-executor | voilaf</title>
+
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+
+<link rel="stylesheet" href="https://use.fontawesome.com/releases/v5.7.2/css/all.css" integrity="sha384-fnmOCqbTlWIlj8LyTjo7mOUStjsKC4pOpQbqyi7RrhN7udi9RwhKkMHpvLbHG9Sr" crossorigin="anonymous">
+<link rel="shortcut icon" href="https://voilaf.github.io/favicon.ico?v=1647182282037">
+<link rel="stylesheet" href="https://voilaf.github.io/styles/main.css">
+
+
+
+<link rel="stylesheet" href="https://unpkg.com/aos@next/dist/aos.css" />
+<script src="https://cdn.jsdelivr.net/npm/vue/dist/vue.js"></script>
+
+
+
+    <meta name="description" content="目的
+探索运行中的线程池，修改参数后的反应现象
+线程池的意义
+每个线程池维护一些基本的统计信息，如完成的任务数，另外，线程池定位解决两个问题：
+
+将每个任务与线程如何执行、调度解耦，不需要去显示创建线程
+执行大量异步任务时，由于减少了每个任..." />
+    <meta name="keywords" content="" />
+  </head>
+  <body>
+    <div id="app" class="main">
+
+      <div class="sidebar" :class="{ 'full-height': menuVisible }">
+  <div class="top-container" data-aos="fade-right">
+    <div class="top-header-container">
+      <a class="site-title-container" href="https://voilaf.github.io">
+        <img src="https://voilaf.github.io/images/avatar.png?v=1647182282037" class="site-logo">
+        <h1 class="site-title">voilaf</h1>
+      </a>
+      <div class="menu-btn" @click="menuVisible = !menuVisible">
+        <div class="line"></div>
+      </div>
+    </div>
+    <div>
+      
+        
+          <a href="https://voilaf.github.io" class="site-nav">
+            首页
+          </a>
+        
+      
+    </div>
+  </div>
+  <div class="bottom-container" data-aos="flip-up" data-aos-offset="0">
+    <div class="social-container">
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+    </div>
+    <div class="site-description">
+      hhh
+    </div>
+    <div class="site-footer">
+      Powered by <a href="https://github.com/getgridea/gridea" target="_blank">Gridea</a> | <a class="rss" href="https://voilaf.github.io/atom.xml" target="_blank">RSS</a>
+    </div>
+  </div>
+</div>
+
+
+      <div class="main-container">
+        <div class="content-container" data-aos="fade-up">
+          <div class="post-detail">
+            <h2 class="post-title">thread-pool-executor</h2>
+            <div class="post-date">2022-03-12</div>
+            
+            <div class="post-content" v-pre>
+              <h1 id="目的">目的</h1>
+<p>探索运行中的线程池，修改参数后的反应现象</p>
+<h1 id="线程池的意义">线程池的意义</h1>
+<p>每个线程池维护一些基本的统计信息，如完成的任务数，另外，线程池定位解决两个问题：</p>
+<ol>
+<li>将每个任务与线程如何执行、调度解耦，不需要去显示创建线程</li>
+<li>执行大量异步任务时，由于减少了每个任务的调用开销（线程不用重复创建），可以很有效的提高性能</li>
+<li>提供了限制和管理资源的方法，目标对象包括线程、消费的任务等</li>
+</ol>
+<h1 id="threadpoolexecutor-介绍">ThreadPoolExecutor 介绍</h1>
+<p>PS：类注释写的非常好，说明了类的作用和各个参数之间的关系</p>
+<h2 id="初始化过程相关参数">初始化过程相关参数</h2>
+<table>
+<thead>
+<tr>
+<th>parameter</th>
+<th>default value</th>
+<th>description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>int corePoolSize</td>
+<td></td>
+<td>Core pool size is the minimum number of workers to keep alive (and not allow to time out etc) unless allowCoreThreadTimeOut is set, in which case the minimum is zero.</td>
+</tr>
+<tr>
+<td>int maximumPoolSize</td>
+<td></td>
+<td>Maximum pool size. Note that the actual maximum is internally bounded by CAPACITY.</td>
+</tr>
+<tr>
+<td>long keepAliveTime</td>
+<td></td>
+<td>Timeout in nanoseconds for idle threads waiting for work. Threads use this timeout when there are more than corePoolSize present or if allowCoreThreadTimeOut. Otherwise they wait forever for new work.</td>
+</tr>
+<tr>
+<td>BlockingQueue<Runnable> workQueue</td>
+<td></td>
+<td>The queue used for holding tasks and handing off to worker threads.</td>
+</tr>
+<tr>
+<td>ThreadFactory threadFactory</td>
+<td>new DefaultThreadFactory()</td>
+<td>Factory for new threads. All threads are created using this factory (via method addWorker).</td>
+</tr>
+<tr>
+<td>RejectedExecutionHandler handler</td>
+<td>new AbortPolicy()</td>
+<td>Handler called when saturated or shutdown in execute.</td>
+</tr>
+</tbody>
+</table>
+<h2 id="core-and-maximum-pool-sizes">Core and maximum pool sizes</h2>
+<p>线程池将根据corePoolSize和maximumPoolSize两个绑定的值，动态自动调整池子内的线程数量。<br>
+投递一个新任务时，如果当前仅存在比corePoolSize小的线程数正在运行，一个新线程Worker将会被创建来处理该任务，即便其他的Worker处于空闲状态；如果存在比corePoolSize大，比maximum小的线程池正在运行，若此时queue已满，将创建新的线程Worker。<br>
+将corePoolSize和maximum的值调整一样，我们将得到一个固定大小的线程池。若设置maximum为Integer.MAX_VALUE，线程池将能够处理任意数量的任务。通常情况下，这两个参数在构造阶段被设置，但是也可以使用setCorePoolSize和setMaximumPoolSize方法动态修改值。<br>
+<img src="https://voilaf.github.io/post-images/1647070731000.png" alt="" loading="lazy"></p>
+<h2 id="on-demand-construction">On-demand construction</h2>
+<p>默认情况下，线程池只有任务被投递时，才会开始创建core线程，但是实际上可以动态调用prestartCoreThread或者prestartAllCoreThreads方法选择创建一个或者所有的core线程。若创建线程池时传入的队列非空已有任务，该操作会很有效。</p>
+<h2 id="creating-new-threads">Creating new threads</h2>
+<p>线程池内通过ThreadFactory创建线程，若没有显示指定，默认使用Executors.defaultThreadFactory，使用相同的ThreadGroup、优先级，非daemon模式。我们可以使用自实现的ThreadFactory，指定thread's name，thread group，priority，daemon status等等。</p>
+<h2 id="keep-alive-times">Keep-alive times</h2>
+<p>如果线程池当前存在超过corePoolSize的线程，并且超出的线程连续空闲超过keepAliveTime时间，这部分线程将变成terminated状态。当线程池不再活跃的被使用时，这将减少资源的消耗。如果后续线程池重新活跃，将会创建新的线程。setKeepALiveTime方法动态调整该参数。使用Long.MAX_VALUE可以防止空闲线程退出。默认情况下，keep-alive策略只针对超出corePoolSize的非core线程有效，但是如果调用了allowCoreThreadTimeOut(true)，且keepAliveTime值大于0，将使core线程也生效。</p>
+<h2 id="queuing">Queuing</h2>
+<p>每个队列都可能被用来转移和持有投递的任务。<br>
+有三种相关的队列使用方式：</p>
+<ol>
+<li>如果比corePoolSize小的线程正在运行，线程池将新增一个新的线程执行任务而不是将任务投递到队列</li>
+<li>如果corePoolSize或者更多的线程正在运行，线程池将把任务投递到队列而不是新增线程</li>
+<li>如果一个任务不能投递到队列，若此时线程数小于maximum，新增线程；否则任务将被拒绝<br>
+有三种队列常用的策略：</li>
+<li>直接交付。如SynchrnousQueue，该队列并不会持有任务，而不是直接转交给线程</li>
+<li>无界队列。如LinkedBlockingQueue（初始化时未指定容量），当corePoolSize对应的线程忙碌状态时，所有新投递的任务都会被投递到队列中排队，直到有core线程空闲，此时maximumPoolSize值没有意义，不会额外创建线程</li>
+<li>有界队列。如ArrayBlockingQueue，设置有限的maximumPoolSize值，可以有效防止资源耗尽，但是这会很难控制，队列容量和maximumPoolSize得做出均衡：使用大的队列容量和小的maximumPoolSize可以减少CPU使用、系统资源和上下文切换负荷，但是吞吐量会减少，既任务执行的慢了。如果任务频繁的堵塞（比如IO密集型任务），系统可能能够有比预想更多的时间去调度线程。使用小的队列通常要求更大的线程池，会导致CPU更繁忙，但是可能会碰到不可接受的调度开销，也会使吞吐量减少。</li>
+</ol>
+<h2 id="rejected-tasks">Rejected tasks</h2>
+<p>当线程池已被shutdown或者有边界（已到达最大线程池和队列已饱和），投递任务将被拒绝。<br>
+默认已预定义了四种拒绝策略：</p>
+<ol>
+<li>默认选择策略：AbortPolicy。拒绝任务时会抛出一个Runtime异常（RejectedExecutionException）</li>
+<li>CallerRunsPolicy。投递任务的线程本身会同步执行该任务，任务执行从异步变成同步，会影响正常的业务响应</li>
+<li>DiscardPolicy。投递的任务将会被丢弃，忽略不再执行</li>
+<li>DiscardOldestPolicy。如果线程池未被shutdown，在队列头部的任务（最先投递）将被丢弃，并重新投递当前任务</li>
+</ol>
+<h2 id="hook-methods">Hook methods</h2>
+<p>可以继承ThreadPoolExecutor类重写beforeExecute(Thread, Runnable)和afterExecute(Runnable, Throwable)方法，在每一个任务执行前后，增加hook</p>
+<h1 id="类结构">类结构</h1>
+<figure data-type="image" tabindex="1"><img src="https://voilaf.github.io/post-images/1647068674907.png" alt="" loading="lazy"></figure>
+<h2 id="interface-executor">interface Executor</h2>
+<p>An object that executes submitted Runnable tasks. This interface provides a way of decoupling task submission from the mechanics of how each task will be run, including details of thread use, scheduling, etc. An Executor is normally used instead of explicitly creating threads. However, the Executor interface does not strictly require that execution be asynchronous.</p>
+<h2 id="interface-executorservice">interface ExecutorService</h2>
+<p>ExecutorService implements Executor，it is a more extensive interface. An ExecutorService can be shut down, which will cause it to reject new tasks. Two different methods are provided for shutting down an ExecutorService. The shutdown method will allow previously submitted tasks to execute before terminating, while the shutdownNow method prevents waiting tasks from starting and attempts to stop currently executing tasks. Upon termination, an executor has no tasks actively executing, no tasks awaiting execution, and no new tasks can be submitted. An unused ExecutorService should be shut down to allow reclamation of its resources.</p>
+<h2 id="abstract-class-abstractexecutorservice">abstract class AbstractExecutorService</h2>
+<p>Provides default implementations of ExecutorService execution methods. This class implements the submit, invokeAny and invokeAll methods using a RunnableFuture returned by newTaskFor, which defaults to the FutureTask class provided in this package.</p>
+<h2 id="class-threadpoolexecutor">class ThreadPoolExecutor</h2>
+<p>An ExecutorService that executes each submitted task using one of possibly several pooled threads, normally configured using Executors factory methods.</p>
+<h3 id="inner-class-worker">inner class Worker</h3>
+<p>Class Worker mainly maintains interrupt control state for threads running tasks, along with other minor bookkeeping.<br>
+Worker类继承AbstractQueuedSynchronizer，以便于在每个任务执行时，可以简化获取和释放锁的操作，这可以防止中断时去唤醒等待任务的线程而不是一个正在执行任务的线程。另外，不使用ReentrantLock而是单独实现一个简单的排他锁是因为当线程控制方法被调用时（比如setCorePoolSize），worker不会重复的获取锁。</p>
+<h2 id="class-executors">class Executors</h2>
+<p>该类并不与上述几个类有直接关系，但是往往会伴随使用。<br>
+Factory and utility methods for Executor, ExecutorService, ScheduledExecutorService, ThreadFactory, and Callable classes defined in this package. This class supports the following kinds of methods:<br>
+Methods that create and return an ExecutorService set up with commonly useful configuration settings.</p>
+<ul>
+<li>Methods that create and return a ScheduledExecutorService set up with commonly useful configuration settings.</li>
+<li>Methods that create and return a &quot;wrapped&quot; ExecutorService, that disables reconfiguration by making implementation-specific methods inaccessible.</li>
+<li>Methods that create and return a ThreadFactory that sets newly created threads to a known state.</li>
+<li>Methods that create and return a Callable out of other closure-like forms, so they can be used in execution methods requiring Callable.</li>
+</ul>
+<h1 id="状态属性">状态属性</h1>
+<pre><code>private final AtomicInteger ctl = new AtomicInteger(ctlOf(RUNNING, 0));
+private static final int COUNT_BITS = Integer.SIZE - 3;
+private static final int CAPACITY   = (1 &lt;&lt; COUNT_BITS) - 1;
+
+// runState is stored in the high-order bits
+private static final int RUNNING    = -1 &lt;&lt; COUNT_BITS;
+private static final int SHUTDOWN   =  0 &lt;&lt; COUNT_BITS;
+private static final int STOP       =  1 &lt;&lt; COUNT_BITS;
+private static final int TIDYING    =  2 &lt;&lt; COUNT_BITS;
+private static final int TERMINATED =  3 &lt;&lt; COUNT_BITS;
+</code></pre>
+<blockquote>
+<p>The main pool control state, ctl, is an atomic integer packing two conceptual fields workerCount, indicating the effective number of threads runState, indicating whether running, shutting down etc In order to pack them into one int.</p>
+</blockquote>
+<blockquote>
+<p>The workerCount is the number of workers that have been permitted to start and not permitted to stop.</p>
+</blockquote>
+<blockquote>
+<p>The runState provides the main lifecycle control, taking on values: RUNNING: Accept new tasks and process queued tasks<br>
+SHUTDOWN: Don't accept new tasks, but process queued tasks<br>
+STOP: Don't accept new tasks, don't process queued tasks, and interrupt in-progress tasks<br>
+TIDYING: All tasks have terminated, workerCount is zero, the thread transitioning to state TIDYING will run the terminated() hook method TERMINATED: terminated() has completed The numerical order among these values matters, to allow ordered comparisons.</p>
+</blockquote>
+<p>CAPACITY二进制表示：      0001 1111 1111 1111 1111 1111 1111 1111<br>
+RUNNING二进制表示：     1110 0000 0000 0000 0000 0000 0000 0000 &lt; 0<br>
+SHUTDOWN二进制表示： 0000 0000 0000 0000 0000 0000 0000 0000 = 0<br>
+STOP二进制表示：             0010 0000 0000 0000 0000 0000 0000 0000 &gt; 0<br>
+TIDYING二进制表示：        0100 0000 0000 0000 0000 0000 0000 0000 &gt; 0<br>
+TERMINATED二进制表示：0110 0000 0000 0000 0000 0000 0000 0000 &gt; 0<br>
+数值大于对比：RUNNING &lt; SHUTODWN &lt; STOP &lt; TIDYING &lt; TERMINATED<br>
+PS：数值关系是isRunning、runStateAtLeast、runStateLessThan等状态相关方法成立的前提，线程池的状态流程是一个递进的关系</p>
+<h1 id="状态方法">状态方法</h1>
+<pre><code>// Packing and unpacking ctl
+private static int runStateOf(int c)     { return c &amp; ~CAPACITY; }
+private static int workerCountOf(int c)  { return c &amp; CAPACITY; }
+private static int ctlOf(int rs, int wc) { return rs | wc; }
+</code></pre>
+<p>~CAPACITY有效位：1110 0000 0000 0000 0000 0000 0000 0000<br>
+runStateOf方法获取线程池的运行状态<br>
+workerCountOf方法获取线程池当前线程数量<br>
+ctlOf方法或操作将线程池运行状态和线程池线程数量合并到一个整型变量</p>
+<h1 id="线程池运行">线程池运行</h1>
+<pre><code>public static void main(String[] args) {
+    ThreadPoolExecutor executor = new ThreadPoolExecutor(5, 10, 60L, TimeUnit.SECONDS, new LinkedBlockingQueue&lt;&gt;(1));
+    executor.execute(() -&gt; System.out.println(Thread.currentThread().getName()));
+    executor.shutdown();
+}
+</code></pre>
+<p>这是最常见的demo，创建了一个线程池，corePoolSize为5，maximumPoolSize为10，队列类型为LinkedBlockingQueue且容量为1。<br>
+execute方法投递一个Runnable并等待执行。<br>
+shutdown方法终止线程池。</p>
+<h2 id="execute方法执行步骤">execute方法执行步骤</h2>
+<blockquote>
+<p>Proceed in 3 steps:</p>
+<ol>
+<li>If fewer than corePoolSize threads are running, try to<br>
+start a new thread with the given command as its first<br>
+task.  The call to addWorker atomically checks runState and<br>
+workerCount, and so prevents false alarms that would add<br>
+threads when it shouldn't, by returning false.<br>
+当前存在corePoolSize个线程正在运行，添加一个新线程，并将该任务作为新线程的第一个任务，存储到内部参数里，而不会去队列内获取任务。addWorker方法可能会创建线程失败并返回false。</li>
+</ol>
+</blockquote>
+<blockquote>
+<ol start="2">
+<li>If a task can be successfully queued, then we still need<br>
+to double-check whether we should have added a thread<br>
+(because existing ones died since last checking) or that<br>
+the pool shut down since entry into this method. So we<br>
+recheck state and if necessary roll back the enqueuing if<br>
+stopped, or start a new thread if there are none.<br>
+如果成功投递一个任务到队列中，我们需要二次检查判断当前线程池中是否存在活跃线程（如：corePoolSize等于0；或二次检查前活跃线程退出；或线程池非Running状态，将不再接受新任务）。选择从队列取出任务并reject或新创建线程。</li>
+</ol>
+</blockquote>
+<blockquote>
+<ol start="3">
+<li>If we cannot queue task, then we try to add a new<br>
+thread.  If it fails, we know we are shut down or saturated<br>
+and so reject the task.<br>
+如果队列无法投递任务，则去创建新的非core线程，若创建失败表示线程池非Running或资源已经饱和并reject。</li>
+</ol>
+</blockquote>
+<pre><code>public void execute(Runnable command) {
+    if (command == null)
+        throw new NullPointerException();
+    int c = ctl.get();
+    if (workerCountOf(c) &lt; corePoolSize) {
+        if (addWorker(command, true))
+            return;
+        c = ctl.get();
+    }
+    if (isRunning(c) &amp;&amp; workQueue.offer(command)) {
+        int recheck = ctl.get();
+        if (! isRunning(recheck) &amp;&amp; remove(command))
+            reject(command);
+        else if (workerCountOf(recheck) == 0)
+            addWorker(null, false);
+    }
+    else if (!addWorker(command, false))
+        reject(command);
+}
+</code></pre>
+<figure data-type="image" tabindex="2"><img src="https://voilaf.github.io/post-images/1647163442793.png" alt="" loading="lazy"></figure>
+<h2 id="addworker方法执行步骤">addWorker方法执行步骤</h2>
+<p>第一个for循环判断线程池的运行状态<br>
+第二个for循环判断线程数是否符合条件并且CAS更新ctl</p>
+<pre><code>private boolean addWorker(Runnable firstTask, boolean core) {
+    retry:
+    for (;;) {
+        ......
+        for (;;) {
+            ......
+        }
+    }
+}
+</code></pre>
+<p>检查运行状态：非RUNNING状态时，仅指定SHUTDOWN状态并且非投递任务、队列非空才创建线程</p>
+<pre><code>// Check if queue empty only if necessary.
+if (rs &gt;= SHUTDOWN &amp;&amp;
+    ! (rs == SHUTDOWN &amp;&amp;
+        firstTask == null &amp;&amp;
+        ! workQueue.isEmpty()))
+    return false;
+</code></pre>
+<p>创建core线程时，判断当前线程数是否已大于corePoolSize<br>
+创建非core线程时，判断当前线程数是否已大于maximumPoolSize</p>
+<pre><code>int wc = workerCountOf(c);
+if (wc &gt;= CAPACITY ||
+    wc &gt;= (core ? corePoolSize : maximumPoolSize))
+    return false;
+</code></pre>
+<p>CAS操作ctl变量，线程数计数加1，增加成功则全局状态设置完成，退出两个for循环，进行剩余的线程初始化工作</p>
+<pre><code>if (compareAndIncrementWorkerCount(c))
+    break retry;
+</code></pre>
+<p>判断线程池状态是否变动，变动则重新执行第一个for循环进行线程池状态判断</p>
+<pre><code>c = ctl.get();  // Re-read ctl
+if (runStateOf(c) != rs)
+    continue retry;
+</code></pre>
+<h3 id="reentrantlock-mainlock">ReentrantLock mainLock</h3>
+<blockquote>
+<p>Lock held on access to workers set and related bookkeeping.<br>
+It also simplifies some of the associated statistics bookkeeping of largestPoolSize etc.</p>
+</blockquote>
+<p>根据mainLock的注释来看，是为了加锁处理Worker相关的设置和一些统计等，避免不必要的中断<br>
+个别使用场景有：</p>
+<ol>
+<li>Worker内线程进行中断</li>
+<li>操作workers变量（存在Worker类的集合）</li>
+<li>统计Worker内的completedTasks变量</li>
+<li>获取largestPoolSize变量<br>
+...</li>
+</ol>
+<h3 id="worker类">Worker类</h3>
+<p><b> 两个类属性</b><br>
+Worker类承载线程运行业务，线程对应thread变量<br>
+创建core线程或者队列已满添加非core线程时，将投递的任务作为线程的第一个执行任务，不需要从队列中获取</p>
+<pre><code>Thread thread;
+Runnable firstTask;
+</code></pre>
+<p><b> AQS此处的作用</b><br>
+state变量不同值对应的含义：<br>
+-1：初始化Worker类阶段<br>
+0：当前线程可执行任务<br>
+1：当前线程已获取任务或正在执行任务</p>
+<p>开始执行任务前，需堵塞获取锁<br>
+中断线程池的空闲线程前，需逐个尝试获取锁，获取成功（表示空闲）再对该线程进行中断</p>
+<p>总结来说，需要根据state来判断Worker类对应线程当前的状态，并以此进行状态的判断和行为操作。</p>
+<p><b>start</b><br>
+以上关于Worker类及其对应线程的创建过程，修改ctl全局变量、创建Worker类、修改对应统计相关信息，最后启动线程对应执行runWorker(Worker)方法</p>
+<p>有几个关键的地方：</p>
+<ol>
+<li>每次获取到任务（可以是首次创建传入的任务，也可以是队列中获取到的），执行业务前需要获取锁，既修改state值（此处一般不会堵塞，唯一可能造成影响的是，中断空闲线程时尝试加锁并触发中断）</li>
+<li>lock完成后，需要判断线程池的状态，若线程池已为STOP以上的状态，需要确保当前线程是中断状态</li>
+<li>getTask做了什么事情</li>
+<li>退出轮询获取任务的循环块后，执行processWorkerExit方法做清理工作</li>
+</ol>
+<p>getTask<br>
+一个不停的循环做逻辑判断获取任务。<br>
+线程池SHUTDOWN状态并且队列为空，退出线程<br>
+线程池SHUTDOWN以上状态，不再考虑队列，退出线程</p>
+<p>processWorkerExit<br>
+对一些统计信息做处理，每个线程退回都会尝试tryTerminate操作<br>
+若中断导致的退出，会重新创建Worker<br>
+若非中断导致的退出，会判断当前线程数和理论上的最小线程数之间的关系，按需添加线程（这也是空闲时，线程数变少的逻辑点）</p>
+<p>allowCoreThreadTimeOut 和 keepAliveTime 的协作<br>
+若设置过allowCoreThreadTimeOut为true，则core和非core线程都默认按会超时退出处理<br>
+若未设置过allowCoreThreadTimeOut为true，则仅core线程按会超时退出处理，core线程会堵塞直到获取到任务或者被中断</p>
+<p><b>PS：core和非core线程并无属性的区分，仅仅在于数量</b></p>
+<h3 id="hashsetworker-workers">HashSet<Worker> workers</h3>
+<blockquote>
+<p>Set containing all worker threads in pool. Accessed only when holding mainLock.</p>
+</blockquote>
+<p>所有的Worker存储在workers变量里，也对应了上面提到的mainLock锁的作用点</p>
+<h2 id="shutdown-和-shutdownnow-的区别">shutdown 和 shutdownNow 的区别</h2>
+<pre><code>shutdown:
+    checkShutdownAccess();
+    advanceRunState(SHUTDOWN);
+    interruptIdleWorkers();
+    onShutdown(); // hook for ScheduledThreadPoolExecutor
+
+shutdownNow:
+    checkShutdownAccess();
+    advanceRunState(STOP);
+    interruptWorkers();
+    tasks = drainQueue();
+</code></pre>
+<p>shutdown：</p>
+<ol>
+<li>修改线程池状态为SHUTDOWN，此时将不再接收新任务</li>
+<li>中断<b>空闲</b>的未中断线程</li>
+</ol>
+<p>shutdownNow：</p>
+<ol>
+<li>修改线程池状态为STOP，此时将不再接收新任务，并且不再获取队列中的任务</li>
+<li>中断<b>所有</b>启动的未中断线程</li>
+<li>将队列中未调用的任务返回给调用者</li>
+</ol>
+<h1 id="运行中的线程池修改参数后的反应现象">运行中的线程池，修改参数后的反应现象</h1>
+<p>线程池可修改参数</p>
+<ul>
+<li>corePoolSize</li>
+<li>maximumPoolSize</li>
+<li>keepAliveTime</li>
+<li>threadFactory</li>
+<li>rejectedExecutionHandler</li>
+</ul>
+<h2 id="corepoolsize">corePoolSize</h2>
+<pre><code>public void setCorePoolSize(int corePoolSize) {
+    if (corePoolSize &lt; 0)
+        throw new IllegalArgumentException();
+    int delta = corePoolSize - this.corePoolSize;
+    this.corePoolSize = corePoolSize;
+    if (workerCountOf(ctl.get()) &gt; corePoolSize)
+        interruptIdleWorkers();
+    else if (delta &gt; 0) {
+        // We don't really know how many new threads are &quot;needed&quot;.
+        // As a heuristic, prestart enough new workers (up to new
+        // core size) to handle the current number of tasks in
+        // queue, but stop if queue becomes empty while doing so.
+        int k = Math.min(delta, workQueue.size());
+        while (k-- &gt; 0 &amp;&amp; addWorker(null, true)) {
+            if (workQueue.isEmpty())
+                break;
+        }
+    }
+}
+</code></pre>
+<figure data-type="image" tabindex="3"><img src="https://voilaf.github.io/post-images/1647179789400.png" alt="" loading="lazy"></figure>
+<h2 id="maximumpoolsize">maximumPoolSize</h2>
+<pre><code>public void setMaximumPoolSize(int maximumPoolSize) {
+    if (maximumPoolSize &lt;= 0 || maximumPoolSize &lt; corePoolSize)
+        throw new IllegalArgumentException();
+    this.maximumPoolSize = maximumPoolSize;
+    if (workerCountOf(ctl.get()) &gt; maximumPoolSize)
+        interruptIdleWorkers();
+}
+</code></pre>
+<p>当前线程数大于新maximum，中断空闲线程</p>
+<h2 id="keepalivetime">keepAliveTime</h2>
+<pre><code>public void setKeepAliveTime(long time, TimeUnit unit) {
+    if (time &lt; 0)
+        throw new IllegalArgumentException();
+    if (time == 0 &amp;&amp; allowsCoreThreadTimeOut())
+        throw new IllegalArgumentException(&quot;Core threads must have nonzero keep alive times&quot;);
+    long keepAliveTime = unit.toNanos(time);
+    long delta = keepAliveTime - this.keepAliveTime;
+    this.keepAliveTime = keepAliveTime;
+    if (delta &lt; 0)
+        interruptIdleWorkers();
+}
+</code></pre>
+<p>新keepAliveTime小于旧keepAliveTIme，中断空闲线程</p>
+<h2 id="threadfactory">threadFactory</h2>
+<p>此参数修改对线程池行为并没有什么影响，但并不是一件好事，会导致已创建成功正在的旧线程与新线程不一致，如线程名词、线程daemon属性等等</p>
+<h2 id="rejectedexecutionhandler">rejectedExecutionHandler</h2>
+<p>可自由修改</p>
+<h1 id="submit">submit</h1>
+<p>发现漏了......</p>
+<pre><code>public &lt;T&gt; Future&lt;T&gt; submit(Runnable task, T result);
+
+public &lt;T&gt; Future&lt;T&gt; submit(Callable&lt;T&gt; task);
+
+class FutureTask&lt;V&gt; implements RunnableFuture&lt;V&gt;;
+
+interface RunnableFuture&lt;V&gt; extends Runnable, Future&lt;V&gt;;
+</code></pre>
+<p>两种submit的区分点：</p>
+<ol>
+<li>任务提交时可选择返回的结果是传入result或实际执行产生的结果</li>
+<li>task将被封装到FutureTask类的callable变量，传入result时将包装称RunnableAdapter，区别仅在于RunnableAdapter执行完成真实task后，忽略其响应结果，固定返回result；未传入result则获取返回task执行的结果</li>
+</ol>
+<p>submit的公共点：<br>
+submit方法的特点也在于和execute方法的区分点，是否可获取线程执行的结果<br>
+根据方法签名可知，submit方法会返回一个Future，get方法将使用Lock.support(Thread)方法堵塞当前线程等待（可选择超时时间），上述被执行的FutureTask类在执行产生结果后，会通过LockSupport.unpark(block and wait Thread)进行锁释放</p>
+
+            </div>
+            
+            
+              <div class="next-post">
+                <div class="next">下一篇</div>
+                <a href="https://voilaf.github.io/post/nacos-client-longpolling/">
+                  <h3 class="post-title">
+                    nacos-client config杂谈
+                  </h3>
+                </a>
+              </div>
+            
+
+            
+
+          </div>
+
+        </div>
+      </div>
+    </div>
+
+    <script src="https://unpkg.com/aos@next/dist/aos.js"></script>
+<script type="application/javascript">
+
+AOS.init();
+
+var app = new Vue({
+  el: '#app',
+  data: {
+    menuVisible: false,
+  },
+})
+
+</script>
+
+
+
+
+
+
+  </body>
+</html>
