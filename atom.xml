@@ -2,7 +2,7 @@
 <feed xmlns="http://www.w3.org/2005/Atom">
     <id>https://voilaf.github.io</id>
     <title>voilaf</title>
-    <updated>2022-03-13T14:38:22.150Z</updated>
+    <updated>2022-03-13T14:47:59.889Z</updated>
     <generator>https://github.com/jpmonette/feed</generator>
     <link rel="alternate" href="https://voilaf.github.io"/>
     <link rel="self" href="https://voilaf.github.io/atom.xml"/>
@@ -16,7 +16,62 @@
         <link href="https://voilaf.github.io/post/thread-pool-executor/">
         </link>
         <updated>2022-03-12T07:03:14.000Z</updated>
-        <content type="html"><![CDATA[<h1 id="目的">目的</h1>
+        <content type="html"><![CDATA[<p><ul class="markdownIt-TOC">
+<li><a href="#%E7%9B%AE%E7%9A%84">目的</a></li>
+<li><a href="#%E7%BA%BF%E7%A8%8B%E6%B1%A0%E7%9A%84%E6%84%8F%E4%B9%89">线程池的意义</a></li>
+<li><a href="#threadpoolexecutor-%E4%BB%8B%E7%BB%8D">ThreadPoolExecutor 介绍</a>
+<ul>
+<li><a href="#%E5%88%9D%E5%A7%8B%E5%8C%96%E8%BF%87%E7%A8%8B%E7%9B%B8%E5%85%B3%E5%8F%82%E6%95%B0">初始化过程相关参数</a></li>
+<li><a href="#core-and-maximum-pool-sizes">Core and maximum pool sizes</a></li>
+<li><a href="#on-demand-construction">On-demand construction</a></li>
+<li><a href="#creating-new-threads">Creating new threads</a></li>
+<li><a href="#keep-alive-times">Keep-alive times</a></li>
+<li><a href="#queuing">Queuing</a></li>
+<li><a href="#rejected-tasks">Rejected tasks</a></li>
+<li><a href="#hook-methods">Hook methods</a></li>
+</ul>
+</li>
+<li><a href="#%E7%B1%BB%E7%BB%93%E6%9E%84">类结构</a>
+<ul>
+<li><a href="#interface-executor">interface Executor</a></li>
+<li><a href="#interface-executorservice">interface ExecutorService</a></li>
+<li><a href="#abstract-class-abstractexecutorservice">abstract class AbstractExecutorService</a></li>
+<li><a href="#class-threadpoolexecutor">class ThreadPoolExecutor</a>
+<ul>
+<li><a href="#inner-class-worker">inner class Worker</a></li>
+</ul>
+</li>
+<li><a href="#class-executors">class Executors</a></li>
+</ul>
+</li>
+<li><a href="#%E7%8A%B6%E6%80%81%E5%B1%9E%E6%80%A7">状态属性</a></li>
+<li><a href="#%E7%8A%B6%E6%80%81%E6%96%B9%E6%B3%95">状态方法</a></li>
+<li><a href="#%E7%BA%BF%E7%A8%8B%E6%B1%A0%E8%BF%90%E8%A1%8C">线程池运行</a>
+<ul>
+<li><a href="#execute%E6%96%B9%E6%B3%95%E6%89%A7%E8%A1%8C%E6%AD%A5%E9%AA%A4">execute方法执行步骤</a></li>
+<li><a href="#addworker%E6%96%B9%E6%B3%95%E6%89%A7%E8%A1%8C%E6%AD%A5%E9%AA%A4">addWorker方法执行步骤</a>
+<ul>
+<li><a href="#reentrantlock-mainlock">ReentrantLock mainLock</a></li>
+<li><a href="#worker%E7%B1%BB">Worker类</a></li>
+<li><a href="#hashsetworker-workers">HashSet<Worker> workers</a></li>
+</ul>
+</li>
+<li><a href="#shutdown-%E5%92%8C-shutdownnow-%E7%9A%84%E5%8C%BA%E5%88%AB">shutdown 和 shutdownNow 的区别</a></li>
+</ul>
+</li>
+<li><a href="#%E8%BF%90%E8%A1%8C%E4%B8%AD%E7%9A%84%E7%BA%BF%E7%A8%8B%E6%B1%A0%E4%BF%AE%E6%94%B9%E5%8F%82%E6%95%B0%E5%90%8E%E7%9A%84%E5%8F%8D%E5%BA%94%E7%8E%B0%E8%B1%A1">运行中的线程池，修改参数后的反应现象</a>
+<ul>
+<li><a href="#corepoolsize">corePoolSize</a></li>
+<li><a href="#maximumpoolsize">maximumPoolSize</a></li>
+<li><a href="#keepalivetime">keepAliveTime</a></li>
+<li><a href="#threadfactory">threadFactory</a></li>
+<li><a href="#rejectedexecutionhandler">rejectedExecutionHandler</a></li>
+</ul>
+</li>
+<li><a href="#submit">submit</a></li>
+</ul>
+</p>
+<h1 id="目的">目的</h1>
 <p>探索运行中的线程池，修改参数后的反应现象</p>
 <h1 id="线程池的意义">线程池的意义</h1>
 <p>每个线程池维护一些基本的统计信息，如完成的任务数，另外，线程池定位解决两个问题：</p>
@@ -431,7 +486,13 @@ submit方法的特点也在于和execute方法的区分点，是否可获取线�
         <link href="https://voilaf.github.io/post/nacos-client-longpolling/">
         </link>
         <updated>2022-03-07T14:24:15.000Z</updated>
-        <content type="html"><![CDATA[<p>最近看一个项目长轮询的代码，发现逻辑未通顺，没完整闭环，依稀记得nacos-client处有相同实现，重温并且总结。</p>
+        <content type="html"><![CDATA[<p><ul class="markdownIt-TOC">
+<li><a href="#%E8%83%8C%E6%99%AF">背景</a></li>
+<li><a href="#%E5%85%B3%E9%94%AE%E9%83%A8%E5%88%86%E4%BC%AA%E4%BB%A3%E7%A0%81">关键部分伪代码</a></li>
+<li><a href="#%E7%BB%BC%E4%B8%8A">综上</a></li>
+</ul>
+</p>
+<p>最近看一个项目长轮询的代码，发现逻辑未通顺，没完整闭环，依稀记得nacos-client处有相同实现，重温并且总结。</p>
 <p>注：参考nacos-client 1.x版本</p>
 <h1 id="背景">背景</h1>
 <ul>

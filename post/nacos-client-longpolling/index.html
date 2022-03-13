@@ -8,7 +8,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
 
 <link rel="stylesheet" href="https://use.fontawesome.com/releases/v5.7.2/css/all.css" integrity="sha384-fnmOCqbTlWIlj8LyTjo7mOUStjsKC4pOpQbqyi7RrhN7udi9RwhKkMHpvLbHG9Sr" crossorigin="anonymous">
-<link rel="shortcut icon" href="https://voilaf.github.io/favicon.ico?v=1647182282037">
+<link rel="shortcut icon" href="https://voilaf.github.io/favicon.ico?v=1647182868266">
 <link rel="stylesheet" href="https://voilaf.github.io/styles/main.css">
 
 
@@ -18,12 +18,17 @@
 
 
 
-    <meta name="description" content="最近看一个项目长轮询的代码，发现逻辑未通顺，没完整闭环，依稀记得nacos-client处有相同实现，重温并且总结。
+    <meta name="description" content="
+背景
+关键部分伪代码
+综上
+
+
+最近看一个项目长轮询的代码，发现逻辑未通顺，没完整闭环，依稀记得nacos-client处有相同实现，重温并且总结。
 注：参考nacos-client 1.x版本
 背景
 
-nacos-client config模块1.x版本基于长轮询实现
-..." />
+nacos-client conf..." />
     <meta name="keywords" content="" />
   </head>
   <body>
@@ -33,7 +38,7 @@ nacos-client config模块1.x版本基于长轮询实现
   <div class="top-container" data-aos="fade-right">
     <div class="top-header-container">
       <a class="site-title-container" href="https://voilaf.github.io">
-        <img src="https://voilaf.github.io/images/avatar.png?v=1647182282037" class="site-logo">
+        <img src="https://voilaf.github.io/images/avatar.png?v=1647182868266" class="site-logo">
         <h1 class="site-title">voilaf</h1>
       </a>
       <div class="menu-btn" @click="menuVisible = !menuVisible">
@@ -81,7 +86,13 @@ nacos-client config模块1.x版本基于长轮询实现
             <div class="post-date">2022-03-07</div>
             
             <div class="post-content" v-pre>
-              <p>最近看一个项目长轮询的代码，发现逻辑未通顺，没完整闭环，依稀记得nacos-client处有相同实现，重温并且总结。</p>
+              <p><ul class="markdownIt-TOC">
+<li><a href="#%E8%83%8C%E6%99%AF">背景</a></li>
+<li><a href="#%E5%85%B3%E9%94%AE%E9%83%A8%E5%88%86%E4%BC%AA%E4%BB%A3%E7%A0%81">关键部分伪代码</a></li>
+<li><a href="#%E7%BB%BC%E4%B8%8A">综上</a></li>
+</ul>
+</p>
+<p>最近看一个项目长轮询的代码，发现逻辑未通顺，没完整闭环，依稀记得nacos-client处有相同实现，重温并且总结。</p>
 <p>注：参考nacos-client 1.x版本</p>
 <h1 id="背景">背景</h1>
 <ul>
