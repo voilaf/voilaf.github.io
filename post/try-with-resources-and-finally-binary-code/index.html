@@ -1,0 +1,677 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="utf-8" >
+
+<title>try-with-resources and finally binary code | voilaf</title>
+
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+
+<link rel="stylesheet" href="https://use.fontawesome.com/releases/v5.7.2/css/all.css" integrity="sha384-fnmOCqbTlWIlj8LyTjo7mOUStjsKC4pOpQbqyi7RrhN7udi9RwhKkMHpvLbHG9Sr" crossorigin="anonymous">
+<link rel="shortcut icon" href="https://voilaf.github.io/favicon.ico?v=1647349453196">
+<link rel="stylesheet" href="https://voilaf.github.io/styles/main.css">
+
+
+
+<link rel="stylesheet" href="https://unpkg.com/aos@next/dist/aos.css" />
+<script src="https://cdn.jsdelivr.net/npm/vue/dist/vue.js"></script>
+
+
+
+    <meta name="description" content="
+目的
+Java版本
+公共类LocalResource
+finally情况分析
+
+含义
+例子一
+
+测试源代码
+class文件反编代码
+对应字节码
+结果描述
+
+
+例子二
+
+测试源代码
+class文件反编代码
+对应字节码
+异常表
+结果描述
+
+
+..." />
+    <meta name="keywords" content="" />
+  </head>
+  <body>
+    <div id="app" class="main">
+
+      <div class="sidebar" :class="{ 'full-height': menuVisible }">
+  <div class="top-container" data-aos="fade-right">
+    <div class="top-header-container">
+      <a class="site-title-container" href="https://voilaf.github.io">
+        <img src="https://voilaf.github.io/images/avatar.png?v=1647349453196" class="site-logo">
+        <h1 class="site-title">voilaf</h1>
+      </a>
+      <div class="menu-btn" @click="menuVisible = !menuVisible">
+        <div class="line"></div>
+      </div>
+    </div>
+    <div>
+      
+        
+          <a href="https://voilaf.github.io" class="site-nav">
+            首页
+          </a>
+        
+      
+    </div>
+  </div>
+  <div class="bottom-container" data-aos="flip-up" data-aos-offset="0">
+    <div class="social-container">
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+    </div>
+    <div class="site-description">
+      hhh
+    </div>
+    <div class="site-footer">
+      Powered by <a href="https://github.com/getgridea/gridea" target="_blank">Gridea</a> | <a class="rss" href="https://voilaf.github.io/atom.xml" target="_blank">RSS</a>
+    </div>
+  </div>
+</div>
+
+
+      <div class="main-container">
+        <div class="content-container" data-aos="fade-up">
+          <div class="post-detail">
+            <h2 class="post-title">try-with-resources and finally binary code</h2>
+            <div class="post-date">2022-03-14</div>
+            
+            <div class="post-content" v-pre>
+              <p><ul class="markdownIt-TOC">
+<li><a href="#%E7%9B%AE%E7%9A%84">目的</a></li>
+<li><a href="#java%E7%89%88%E6%9C%AC">Java版本</a></li>
+<li><a href="#%E5%85%AC%E5%85%B1%E7%B1%BBlocalresource">公共类LocalResource</a></li>
+<li><a href="#finally%E6%83%85%E5%86%B5%E5%88%86%E6%9E%90">finally情况分析</a>
+<ul>
+<li><a href="#%E5%90%AB%E4%B9%89">含义</a></li>
+<li><a href="#%E4%BE%8B%E5%AD%90%E4%B8%80">例子一</a>
+<ul>
+<li><a href="#%E6%B5%8B%E8%AF%95%E6%BA%90%E4%BB%A3%E7%A0%81">测试源代码</a></li>
+<li><a href="#class%E6%96%87%E4%BB%B6%E5%8F%8D%E7%BC%96%E4%BB%A3%E7%A0%81">class文件反编代码</a></li>
+<li><a href="#%E5%AF%B9%E5%BA%94%E5%AD%97%E8%8A%82%E7%A0%81">对应字节码</a></li>
+<li><a href="#%E7%BB%93%E6%9E%9C%E6%8F%8F%E8%BF%B0">结果描述</a></li>
+</ul>
+</li>
+<li><a href="#%E4%BE%8B%E5%AD%90%E4%BA%8C">例子二</a>
+<ul>
+<li><a href="#%E6%B5%8B%E8%AF%95%E6%BA%90%E4%BB%A3%E7%A0%81-2">测试源代码</a></li>
+<li><a href="#class%E6%96%87%E4%BB%B6%E5%8F%8D%E7%BC%96%E4%BB%A3%E7%A0%81-2">class文件反编代码</a></li>
+<li><a href="#%E5%AF%B9%E5%BA%94%E5%AD%97%E8%8A%82%E7%A0%81-2">对应字节码</a></li>
+<li><a href="#%E5%BC%82%E5%B8%B8%E8%A1%A8">异常表</a></li>
+<li><a href="#%E7%BB%93%E6%9E%9C%E6%8F%8F%E8%BF%B0-2">结果描述</a></li>
+</ul>
+</li>
+<li><a href="#%E4%BE%8B%E5%AD%90%E4%B8%89">例子三</a>
+<ul>
+<li><a href="#%E6%B5%8B%E8%AF%95%E6%BA%90%E4%BB%A3%E7%A0%81-3">测试源代码</a></li>
+<li><a href="#class%E6%96%87%E4%BB%B6%E5%8F%8D%E7%BC%96%E4%BB%A3%E7%A0%81-3">class文件反编代码</a></li>
+<li><a href="#%E5%AF%B9%E5%BA%94%E5%AD%97%E8%8A%82%E7%A0%81-3">对应字节码</a></li>
+<li><a href="#%E5%BC%82%E5%B8%B8%E8%A1%A8-2">异常表</a></li>
+<li><a href="#%E7%BB%93%E6%9E%9C%E6%8F%8F%E8%BF%B0-3">结果描述</a></li>
+</ul>
+</li>
+</ul>
+</li>
+<li><a href="#try-with-resources%E6%83%85%E5%86%B5%E5%88%86%E6%9E%90">try-with-resources情况分析</a>
+<ul>
+<li><a href="#%E5%90%AB%E4%B9%89-2">含义</a></li>
+<li><a href="#%E4%BB%80%E4%B9%88%E6%98%AFsuppressed-exception">什么是suppressed exception</a></li>
+<li><a href="#%E9%99%B7%E5%85%A5%E6%80%9D%E7%BB%B4%E7%9A%84%E5%9D%91">陷入思维的坑</a></li>
+<li><a href="#%E4%BE%8B%E5%AD%90%E4%B8%80-2">例子一</a>
+<ul>
+<li><a href="#%E6%B5%8B%E8%AF%95%E6%BA%90%E4%BB%A3%E7%A0%81-4">测试源代码</a></li>
+<li><a href="#class%E6%96%87%E4%BB%B6%E5%8F%8D%E7%BC%96%E4%BB%A3%E7%A0%81-4">class文件反编代码</a></li>
+<li><a href="#%E5%AF%B9%E5%BA%94%E5%AD%97%E8%8A%82%E7%A0%81-4">对应字节码</a></li>
+<li><a href="#%E7%BB%93%E6%9E%9C%E6%8F%8F%E8%BF%B0-4">结果描述</a></li>
+</ul>
+</li>
+<li><a href="#%E4%BE%8B%E5%AD%90%E4%BA%8C-2">例子二</a>
+<ul>
+<li><a href="#%E6%B5%8B%E8%AF%95%E6%BA%90%E4%BB%A3%E7%A0%81-5">测试源代码</a></li>
+<li><a href="#class%E6%96%87%E4%BB%B6%E5%8F%8D%E7%BC%96%E4%BB%A3%E7%A0%81-5">class文件反编代码</a></li>
+<li><a href="#%E5%AF%B9%E5%BA%94%E5%AD%97%E8%8A%82%E7%A0%81-5">对应字节码</a></li>
+<li><a href="#%E5%BC%82%E5%B8%B8%E8%A1%A8-3">异常表</a></li>
+<li><a href="#%E7%BB%93%E6%9E%9C%E6%8F%8F%E8%BF%B0-5">结果描述</a></li>
+</ul>
+</li>
+</ul>
+</li>
+<li><a href="#%E6%80%BB%E7%BB%93">总结</a></li>
+</ul>
+</p>
+<h1 id="目的">目的</h1>
+<p>关于两个功能的字节码实现分析</p>
+<h1 id="java版本">Java版本</h1>
+<p>JDK：1.8.x</p>
+<h1 id="公共类localresource">公共类LocalResource</h1>
+<p>主要是实现了AutoCloseable，用于后续实现try-with-resources语法糖</p>
+<pre><code>public class LocalResource implements AutoCloseable {
+
+    public void handle() {
+        System.out.println(&quot;handle&quot;);
+    }
+
+    @Override
+    public void close() throws Exception {
+        System.out.println(&quot;close&quot;);
+    }
+}
+</code></pre>
+<h1 id="finally情况分析">finally情况分析</h1>
+<h2 id="含义">含义</h2>
+<p>摘自 <a href="https://docs.oracle.com/javase/tutorial/essential/exceptions/finally.html">https://docs.oracle.com/javase/tutorial/essential/exceptions/finally.html</a></p>
+<blockquote>
+<p>The finally block always executes when the try block exits. This ensures that the finally block is executed even if an unexpected exception occurs. But finally is useful for more than just exception handling — it allows the programmer to avoid having cleanup code accidentally bypassed by a return, continue, or break. Putting cleanup code in a finally block is always a good practice, even when no exceptions are anticipated.</p>
+</blockquote>
+<p>确保必须执行的代码（如：资源释放）能够保证被执行，避免被return、break、throw等等语句终止</p>
+<h2 id="例子一">例子一</h2>
+<h3 id="测试源代码">测试源代码</h3>
+<pre><code>public static void main(String[] args) throws Exception {
+    LocalResource localResource = new LocalResource();
+    try {
+    } finally {
+        localResource.close();
+    }
+}
+</code></pre>
+<h3 id="class文件反编代码">class文件反编代码</h3>
+<pre><code>public static void main(String[] args) throws Exception {
+    LocalResource localResource = new LocalResource();
+    localResource.close();
+}
+</code></pre>
+<h3 id="对应字节码">对应字节码</h3>
+<pre><code> 0 new #2 &lt;LocalResource&gt;
+ 3 dup
+ 4 invokespecial #3 &lt;LocalResource.&lt;init&gt; : ()V&gt;
+ 7 astore_1
+ 8 aload_1
+ 9 invokevirtual #4 &lt;LocalResource.close : ()V&gt;
+12 return
+</code></pre>
+<h3 id="结果描述">结果描述</h3>
+<p>该例子try-finally是无效的<br>
+字节码和反编代码都很清晰展示了仅实例化LocalResource对象并调用close方法</p>
+<h2 id="例子二">例子二</h2>
+<h3 id="测试源代码-2">测试源代码</h3>
+<pre><code>public static void main(String[] args) throws Exception {
+    LocalResource localResource = new LocalResource();
+    try {
+        localResource.handle();
+    } finally {
+        localResource.close();
+    }
+}
+</code></pre>
+<h3 id="class文件反编代码-2">class文件反编代码</h3>
+<pre><code>public static void main(String[] args) throws Exception {
+    LocalResource localResource = new LocalResource();
+    try {
+        localResource.handle();
+    } finally {
+        localResource.close();
+    }
+}
+</code></pre>
+<h3 id="对应字节码-2">对应字节码</h3>
+<pre><code> 0 new #2 &lt;LocalResource&gt;
+ 3 dup
+ 4 invokespecial #3 &lt;LocalResource.&lt;init&gt; : ()V&gt;
+ 7 astore_1
+ 8 aload_1
+ 9 invokevirtual #4 &lt;LocalResource.handle : ()V&gt;
+12 aload_1
+13 invokevirtual #5 &lt;LocalResource.close : ()V&gt;
+16 goto 26 (+10)
+19 astore_2
+20 aload_1
+21 invokevirtual #5 &lt;LocalResource.close : ()V&gt;
+24 aload_2
+25 athrow
+26 return
+</code></pre>
+<h3 id="异常表">异常表</h3>
+<table>
+<thead>
+<tr>
+<th>Nr.</th>
+<th>起始PC</th>
+<th>结束PC</th>
+<th>跳转PC</th>
+<th>捕获类型</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>0</td>
+<td>8</td>
+<td>12</td>
+<td>19</td>
+<td>cp_info #0 <br />any</td>
+</tr>
+</tbody>
+</table>
+<h3 id="结果描述-2">结果描述</h3>
+<p>该例子中的反编代码没啥内容，对照异常表来看字节码部分</p>
+<blockquote>
+<p>0 new #2 <LocalResource><br>
+3 dup<br>
+4 invokespecial #3 &lt;LocalResource.<init> : ()V&gt;<br>
+7 astore_1</p>
+</blockquote>
+<p>常规部分，初始化LocalResource对象调用初始化方法后，将类变量存储到本地变量表索引1的位置</p>
+<blockquote>
+<p>8 aload_1<br>
+9 invokevirtual #4 &lt;LocalResource.handle : ()V&gt;</p>
+</blockquote>
+<p>此处表示调用LocalResource类的handle方法，由于调用其他类的方法，并不能保证不会抛出异常，所以异常表定义了若存在异常，将开始执行偏移量19位置及其后续的字节码。<br>
+<b>注意：9后面是12,12并不包含在异常监控范围内</b></p>
+<blockquote>
+<p>19 astore_2<br>
+20 aload_1<br>
+21 invokevirtual #5 &lt;LocalResource.close : ()V&gt;<br>
+24 aload_2<br>
+25 athrow</p>
+</blockquote>
+<p>将handle方法抛出的异常存储到本地变量表下标2的位置，从下标1中取出LocalResource变量执行close方法，重取出异常并抛出，既完成程序执行</p>
+<blockquote>
+<p>12 aload_1<br>
+13 invokevirtual #5 &lt;LocalResource.close : ()V&gt;<br>
+16 goto 26 (+10)<br>
+26 return</p>
+</blockquote>
+<p>这是handle方法不抛出异常的执行分支，则正常取出LocalResource类变量，调用close方法后，return正常完成程序执行</p>
+<p>综上所述，通过区分有异常和无异常的情况，各自插入close方法的执行字节码，确保每个分支都能执行</p>
+<h2 id="例子三">例子三</h2>
+<h3 id="测试源代码-3">测试源代码</h3>
+<pre><code>public static void main(String[] args) throws Exception {
+    LocalResource localResource = new LocalResource();
+    try {
+        localResource.handle();
+        throw new RuntimeException(&quot;runtime&quot;);
+    } finally {
+        localResource.close();
+    }
+}
+</code></pre>
+<h3 id="class文件反编代码-3">class文件反编代码</h3>
+<pre><code>public static void main(String[] args) throws Exception {
+    LocalResource localResource = new LocalResource();
+    try {
+        localResource.handle();
+        throw new RuntimeException(&quot;runtime&quot;);
+    } finally {
+        localResource.close();
+    }
+}
+</code></pre>
+<h3 id="对应字节码-3">对应字节码</h3>
+<pre><code> 0 new #2 &lt;LocalResource&gt;
+ 3 dup
+ 4 invokespecial #3 &lt;LocalResource.&lt;init&gt; : ()V&gt;
+ 7 astore_1
+ 8 aload_1
+ 9 invokevirtual #4 &lt;LocalResource.handle : ()V&gt;
+12 new #5 &lt;java/lang/RuntimeException&gt;
+15 dup
+16 ldc #6 &lt;runtime&gt;
+18 invokespecial #7 &lt;java/lang/RuntimeException.&lt;init&gt; : (Ljava/lang/String;)V&gt;
+21 athrow
+22 astore_2
+23 aload_1
+24 invokevirtual #8 &lt;LocalResource.close : ()V&gt;
+27 aload_2
+28 athrow
+</code></pre>
+<h3 id="异常表-2">异常表</h3>
+<table>
+<thead>
+<tr>
+<th>Nr.</th>
+<th>起始PC</th>
+<th>结束PC</th>
+<th>跳转PC</th>
+<th>捕获类型</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>0</td>
+<td>8</td>
+<td>23</td>
+<td>22</td>
+<td>cp_info #0 <br />any</td>
+</tr>
+</tbody>
+</table>
+<h3 id="结果描述-3">结果描述</h3>
+<p>同样直接来看字节码</p>
+<blockquote>
+<p>0 new #2 <LocalResource><br>
+3 dup<br>
+4 invokespecial #3 &lt;LocalResource.<init> : ()V&gt;<br>
+7 astore_1<br>
+8 aload_1<br>
+9 invokevirtual #4 &lt;LocalResource.handle : ()V&gt;<br>
+12 new #5 &lt;java/lang/RuntimeException&gt;<br>
+15 dup<br>
+16 ldc #6 <runtime><br>
+18 invokespecial #7 &lt;java/lang/RuntimeException.<init> : (Ljava/lang/String;)V&gt;<br>
+21 athrow</p>
+</blockquote>
+<p>这是一路向前没有分支的逻辑，初始化LocalResource类变量并执行handle方法，再初始化一个Runtime异常直接抛出<br>
+对照异常表，抛出异常后开始执行22位置的字节码</p>
+<blockquote>
+<p>22 astore_2<br>
+23 aload_1<br>
+24 invokevirtual #8 &lt;LocalResource.close : ()V&gt;<br>
+27 aload_2<br>
+28 athrow</p>
+</blockquote>
+<p>将异常存储到本地变量表下标2位置，执行LocalResource的close方法，重取出异常并抛出完成程序执行</p>
+<p>综上所述，Java源代码中的异常，下沉到字节码，其实没有那么的粗暴，存在一定的操作粒度，异常触发后的逻辑是可控的</p>
+<h1 id="try-with-resources情况分析">try-with-resources情况分析</h1>
+<h2 id="含义-2">含义</h2>
+<p>摘自 <a href="https://docs.oracle.com/javase/tutorial/essential/exceptions/tryResourceClose.html">https://docs.oracle.com/javase/tutorial/essential/exceptions/tryResourceClose.html</a></p>
+<blockquote>
+<p>The try-with-resources statement is a try statement that declares one or more resources. A resource is an object that must be closed after the program is finished with it. The try-with-resources statement ensures that each resource is closed at the end of the statement. Any object that implements java.lang.AutoCloseable, which includes all objects which implement java.io.Closeable, can be used as a resource.</p>
+</blockquote>
+<p>try语句块内可以定义一或者多个资源，通过try-with-resources语法糖，可以让编写者忽略资源释放逻辑，编译器会隐式的在字节码添加资源关闭的代码</p>
+<h2 id="什么是suppressed-exception">什么是suppressed exception</h2>
+<p>举个例子</p>
+<pre><code>public static void main(String[] args) throws Exception {
+    try {
+        // invoke methodA and throw exception 123
+        // mock
+        throw new RuntimeException(&quot;123&quot;);
+    } finally {
+        // invoke methodClose and throw exception 321
+        // mock
+        throw new RuntimeException(&quot;321&quot;);
+    }
+}
+</code></pre>
+<p>执行结果：<code>Exception in thread &quot;main&quot; java.lang.RuntimeException: 321 	at Application.main(Application.java:22)</code></p>
+<p>try块内的异常信息被后置调用的finally块异常覆盖了。一般情况下，我们会更关注try块内的逻辑和异常。<br>
+这就是suppressed exception的作用，聚焦真正有用的异常信息（并不是抛掉finally内资源释放的异常，而是突出重点）</p>
+<p>再来看个例子</p>
+<pre><code>public static void main(String[] args) throws Exception {
+    Throwable throwable = null;
+    try {
+        // invoke methodA and throw exception 123
+        // mock
+        throw new RuntimeException(&quot;123&quot;);
+    } catch (Exception e) {
+        throwable = e;
+        throw e;
+    } finally {
+        // invoke methodClose and throw exception 321
+        // mock
+        RuntimeException runtimeException = new RuntimeException(&quot;321&quot;);
+        if (throwable == null) {
+            throw runtimeException;
+        } else {
+            throwable.addSuppressed(runtimeException);
+        }
+    }
+}
+</code></pre>
+<p>执行结果：<code>Exception in thread &quot;main&quot; java.lang.RuntimeException: 123 	at Application.main(Application.java:22) 	Suppressed: java.lang.RuntimeException: 321 		at Application.main(Application.java:29)</code></p>
+<p>定义一个Throwable变量去指向业务逻辑的有意义异常，相对优先级低点的异常通过调用addSuppressed方法存储起来，忽略该异常的throw逻辑</p>
+<p>其实严格意义上并不是专门讲suppressed exception的，更倾向是try-with-resources的使用<br>
+可以参考：<a href="https://stackoverflow.com/questions/7849416/what-is-a-suppressed-exception">https://stackoverflow.com/questions/7849416/what-is-a-suppressed-exception</a></p>
+<h2 id="陷入思维的坑">陷入思维的坑</h2>
+<p>下面的例子中，会出现<code>aconst_null</code> 和 <code>astore_x</code>连续的字节码，起初苦思不得，另外吐槽下搜索try-with-resources字节码的文章，也许姿势不对，大部分都是&quot;字节码层面实现了资源释放&quot;一句带过，感觉这篇文章的点醒（<a href="https://emacsist.github.io/2020/05/25/%E6%B7%B1%E5%85%A5%E7%90%86%E8%A7%A3jvm%E5%AD%97%E8%8A%82%E7%A0%81%E8%AF%BB%E4%B9%A6%E7%AC%94%E8%AE%B0/">https://emacsist.github.io/2020/05/25/深入理解jvm字节码读书笔记/</a>），让我反应过来回过头去看反编的源代码</p>
+<h2 id="例子一-2">例子一</h2>
+<h3 id="测试源代码-4">测试源代码</h3>
+<pre><code>public static void main(String[] args) throws Exception {
+    try(LocalResource localResource = new LocalResource()) {
+
+    }
+}
+</code></pre>
+<h3 id="class文件反编代码-4">class文件反编代码</h3>
+<pre><code>public static void main(String[] args) throws Exception {
+    LocalResource localResource = new LocalResource();
+    Object var2 = null;
+    if (localResource != null) {
+        if (var2 != null) {
+            try {
+                localResource.close();
+            } catch (Throwable var4) {
+                ((Throwable)var2).addSuppressed(var4);
+            }
+        } else {
+            localResource.close();
+        }
+    }
+}
+</code></pre>
+<h3 id="对应字节码-4">对应字节码</h3>
+<pre><code> 0 new #2 &lt;LocalResource&gt;
+ 3 dup
+ 4 invokespecial #3 &lt;LocalResource.&lt;init&gt; : ()V&gt;
+ 7 astore_1
+ 8 aconst_null
+ 9 astore_2
+10 aload_1
+11 ifnull 38 (+27)
+14 aload_2
+15 ifnull 34 (+19)
+18 aload_1
+19 invokevirtual #4 &lt;LocalResource.close : ()V&gt;
+22 goto 38 (+16)
+25 astore_3
+26 aload_2
+27 aload_3
+28 invokevirtual #6 &lt;java/lang/Throwable.addSuppressed : (Ljava/lang/Throwable;)V&gt;
+31 goto 38 (+7)
+34 aload_1
+35 invokevirtual #4 &lt;LocalResource.close : ()V&gt;
+38 return
+</code></pre>
+<h3 id="结果描述-4">结果描述</h3>
+<p>这个例子并不复杂，甚至还有点奇怪，class文件反编代码里var2没有赋值操作，为什么还有判断是否为空（例子二解惑）？另外，只看测试源代码和字节码，怎么都想不明白8、9的作用，只能根据上下文26、27得出这是存储了一个Throwable的变量（同样，例子二解惑）</p>
+<h2 id="例子二-2">例子二</h2>
+<p>例子一解惑：因为例子一是脱离于实际的不完整代码~，try块内无有意义的业务代码，这一般不会发生</p>
+<h3 id="测试源代码-5">测试源代码</h3>
+<pre><code>public static void main(String[] args) throws Exception {
+    try(LocalResource localResource = new LocalResource()) {
+        // 模拟增加业务处理
+        localResource.handle();
+    }
+}
+</code></pre>
+<h3 id="class文件反编代码-5">class文件反编代码</h3>
+<pre><code>public static void main(String[] args) throws Exception {
+    LocalResource localResource = new LocalResource();
+    Throwable var2 = null;
+    try {
+        localResource.handle();
+    } catch (Throwable var11) {
+        var2 = var11;
+        throw var11;
+    } finally {
+        if (localResource != null) {
+            if (var2 != null) {
+                try {
+                    localResource.close();
+                } catch (Throwable var10) {
+                    var2.addSuppressed(var10);
+                }
+            } else {
+                localResource.close();
+            }
+        }
+    }
+}
+</code></pre>
+<h3 id="对应字节码-5">对应字节码</h3>
+<pre><code> 0 new #2 &lt;LocalResource&gt;
+ 3 dup
+ 4 invokespecial #3 &lt;LocalResource.&lt;init&gt; : ()V&gt;
+ 7 astore_1
+ 8 aconst_null
+ 9 astore_2
+10 aload_1
+11 invokevirtual #4 &lt;LocalResource.handle : ()V&gt;
+14 aload_1
+15 ifnull 85 (+70)
+18 aload_2
+19 ifnull 38 (+19)
+22 aload_1
+23 invokevirtual #5 &lt;LocalResource.close : ()V&gt;
+26 goto 85 (+59)
+29 astore_3
+30 aload_2
+31 aload_3
+32 invokevirtual #7 &lt;java/lang/Throwable.addSuppressed : (Ljava/lang/Throwable;)V&gt;
+35 goto 85 (+50)
+38 aload_1
+39 invokevirtual #5 &lt;LocalResource.close : ()V&gt;
+42 goto 85 (+43)
+45 astore_3
+46 aload_3
+47 astore_2
+48 aload_3
+49 athrow
+50 astore 4
+52 aload_1
+53 ifnull 82 (+29)
+56 aload_2
+57 ifnull 78 (+21)
+60 aload_1
+61 invokevirtual #5 &lt;LocalResource.close : ()V&gt;
+64 goto 82 (+18)
+67 astore 5
+69 aload_2
+70 aload 5
+72 invokevirtual #7 &lt;java/lang/Throwable.addSuppressed : (Ljava/lang/Throwable;)V&gt;
+75 goto 82 (+7)
+78 aload_1
+79 invokevirtual #5 &lt;LocalResource.close : ()V&gt;
+82 aload 4
+84 athrow
+85 return
+</code></pre>
+<h3 id="异常表-3">异常表</h3>
+<table>
+<thead>
+<tr>
+<th>Nr.</th>
+<th>起始PC</th>
+<th>结束PC</th>
+<th>跳转PC</th>
+<th>捕获类型</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>0</td>
+<td>22</td>
+<td>26</td>
+<td>29</td>
+<td>cp_info #6 <br />java/lang/Throwable</td>
+</tr>
+<tr>
+<td>1</td>
+<td>10</td>
+<td>14</td>
+<td>45</td>
+<td>cp_info #6 <br />java/lang/Throwable</td>
+</tr>
+<tr>
+<td>2</td>
+<td>10</td>
+<td>14</td>
+<td>50</td>
+<td>cp_info #0 <br />any</td>
+</tr>
+<tr>
+<td>3</td>
+<td>60</td>
+<td>64</td>
+<td>67</td>
+<td>cp_info #6 <br />java/lang/Throwable</td>
+</tr>
+<tr>
+<td>4</td>
+<td>45</td>
+<td>52</td>
+<td>50</td>
+<td>cp_info #0 <br />any</td>
+</tr>
+</tbody>
+</table>
+<h3 id="结果描述-5">结果描述</h3>
+<p>由于语法糖的存在，测试编写的源代码经编译后面目全非，聚焦class文件反编代码和字节码、异常表</p>
+<figure data-type="image" tabindex="1"><img src="https://voilaf.github.io/post-images/1647349207530.png" alt="" loading="lazy"></figure>
+<p>注意两个红框内容，从逻辑上来看这两处是没有意义的（也许是我没看出来，但是不像），至于为什么会是这样的结果，强行从表面来解释的话，是因为finally里的代码是共用的...</p>
+<h1 id="总结">总结</h1>
+<p>try-with-resources 和 finally 其实都是在字节码层，判断种种执行分支，增加各种兜底处理，确保我们一定想要执行的代码，在哪个分支下都存在，同时复杂的地方在于要兼容各种异常情况</p>
+
+            </div>
+            
+            
+              <div class="next-post">
+                <div class="next">下一篇</div>
+                <a href="https://voilaf.github.io/post/thread-pool-executor/">
+                  <h3 class="post-title">
+                    thread-pool-executor
+                  </h3>
+                </a>
+              </div>
+            
+
+            
+
+          </div>
+
+        </div>
+      </div>
+    </div>
+
+    <script src="https://unpkg.com/aos@next/dist/aos.js"></script>
+<script type="application/javascript">
+
+AOS.init();
+
+var app = new Vue({
+  el: '#app',
+  data: {
+    menuVisible: false,
+  },
+})
+
+</script>
+
+
+
+
+
+
+  </body>
+</html>
