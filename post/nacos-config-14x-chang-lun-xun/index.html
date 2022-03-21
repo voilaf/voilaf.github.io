@@ -1,0 +1,449 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="utf-8" >
+
+<title>nacos-config-1.4.x长轮询 | voilaf</title>
+
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+
+<link rel="stylesheet" href="https://use.fontawesome.com/releases/v5.7.2/css/all.css" integrity="sha384-fnmOCqbTlWIlj8LyTjo7mOUStjsKC4pOpQbqyi7RrhN7udi9RwhKkMHpvLbHG9Sr" crossorigin="anonymous">
+<link rel="shortcut icon" href="https://voilaf.github.io/favicon.ico?v=1647872479723">
+<link rel="stylesheet" href="https://voilaf.github.io/styles/main.css">
+
+
+
+<link rel="stylesheet" href="https://unpkg.com/aos@next/dist/aos.css" />
+<script src="https://cdn.jsdelivr.net/npm/vue/dist/vue.js"></script>
+
+
+
+    <meta name="description" content="
+目的
+client流程
+
+客户端接入
+关键类
+
+NacosConfigService
+ClientWorker
+HttpAgent
+CacheData
+Listener
+
+
+客户端长轮询
+
+
+server流程
+
+判断配置集是否更新
+
+
+两..." />
+    <meta name="keywords" content="" />
+  </head>
+  <body>
+    <div id="app" class="main">
+
+      <div class="sidebar" :class="{ 'full-height': menuVisible }">
+  <div class="top-container" data-aos="fade-right">
+    <div class="top-header-container">
+      <a class="site-title-container" href="https://voilaf.github.io">
+        <img src="https://voilaf.github.io/images/avatar.png?v=1647872479723" class="site-logo">
+        <h1 class="site-title">voilaf</h1>
+      </a>
+      <div class="menu-btn" @click="menuVisible = !menuVisible">
+        <div class="line"></div>
+      </div>
+    </div>
+    <div>
+      
+        
+          <a href="https://voilaf.github.io" class="site-nav">
+            首页
+          </a>
+        
+      
+    </div>
+  </div>
+  <div class="bottom-container" data-aos="flip-up" data-aos-offset="0">
+    <div class="social-container">
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+    </div>
+    <div class="site-description">
+      hhh
+    </div>
+    <div class="site-footer">
+      Powered by <a href="https://github.com/getgridea/gridea" target="_blank">Gridea</a> | <a class="rss" href="https://voilaf.github.io/atom.xml" target="_blank">RSS</a>
+    </div>
+  </div>
+</div>
+
+
+      <div class="main-container">
+        <div class="content-container" data-aos="fade-up">
+          <div class="post-detail">
+            <h2 class="post-title">nacos-config-1.4.x长轮询</h2>
+            <div class="post-date">2022-03-17</div>
+            
+            <div class="post-content" v-pre>
+              <p><ul class="markdownIt-TOC">
+<li><a href="#%E7%9B%AE%E7%9A%84">目的</a></li>
+<li><a href="#client%E6%B5%81%E7%A8%8B">client流程</a>
+<ul>
+<li><a href="#%E5%AE%A2%E6%88%B7%E7%AB%AF%E6%8E%A5%E5%85%A5">客户端接入</a></li>
+<li><a href="#%E5%85%B3%E9%94%AE%E7%B1%BB">关键类</a>
+<ul>
+<li><a href="#nacosconfigservice">NacosConfigService</a></li>
+<li><a href="#clientworker">ClientWorker</a></li>
+<li><a href="#httpagent">HttpAgent</a></li>
+<li><a href="#cachedata">CacheData</a></li>
+<li><a href="#listener">Listener</a></li>
+</ul>
+</li>
+<li><a href="#%E5%AE%A2%E6%88%B7%E7%AB%AF%E9%95%BF%E8%BD%AE%E8%AF%A2">客户端长轮询</a></li>
+</ul>
+</li>
+<li><a href="#server%E6%B5%81%E7%A8%8B">server流程</a>
+<ul>
+<li><a href="#%E5%88%A4%E6%96%AD%E9%85%8D%E7%BD%AE%E9%9B%86%E6%98%AF%E5%90%A6%E6%9B%B4%E6%96%B0">判断配置集是否更新</a></li>
+</ul>
+</li>
+<li><a href="#%E4%B8%A4%E7%A7%8D%E6%8E%A5%E5%85%A5%E6%96%B9%E5%BC%8F%E7%9A%84%E8%87%AA%E5%8A%A8%E5%88%B7%E6%96%B0">两种接入方式的自动刷新</a>
+<ul>
+<li><a href="#nacos-config-spring-boot-starter">nacos-config-spring-boot-starter</a>
+<ul>
+<li><a href="#nacosvalue%E6%B3%A8%E8%A7%A3%E5%A6%82%E4%BD%95%E5%AE%8C%E6%88%90%E5%88%9D%E6%AC%A1%E6%B3%A8%E5%85%A5">NacosValue注解如何完成初次注入</a></li>
+<li><a href="#%E6%89%93%E5%BC%80autorreshed%E9%80%89%E9%A1%B9%E5%A6%82%E4%BD%95%E5%AE%8C%E6%88%90%E5%AE%9E%E6%97%B6%E5%8A%A8%E6%80%81%E5%88%B7%E6%96%B0">打开autoRreshed选项如何完成实时动态刷新</a></li>
+</ul>
+</li>
+<li><a href="#spring-cloud-starter-alibaba-nacos-config">spring-cloud-starter-alibaba-nacos-config</a>
+<ul>
+<li><a href="#value%E6%B3%A8%E8%A7%A3%E5%A6%82%E4%BD%95%E5%AE%8C%E6%88%90%E5%88%9D%E6%AC%A1%E6%B3%A8%E5%85%A5">Value注解如何完成初次注入</a></li>
+<li><a href="#refreshscope%E5%A6%82%E4%BD%95%E5%AE%8C%E6%88%90%E5%AE%9E%E6%97%B6%E5%8A%A8%E6%80%81%E5%88%B7%E6%96%B0">RefreshScope如何完成实时动态刷新</a></li>
+<li><a href="#%E4%B8%80%E4%B8%AA%E4%B8%8D%E7%BB%8F%E6%84%8F%E5%8F%AF%E8%83%BD%E4%BC%9A%E5%8F%91%E7%94%9F%E7%9A%84%E9%97%AE%E9%A2%98">一个不经意可能会发生的问题</a></li>
+</ul>
+</li>
+</ul>
+</li>
+</ul>
+</p>
+<blockquote>
+<p>及格的代码能跑通逻辑，良好的代码有层次化的设计，优秀的代码有令人惊叹且愉悦的注释说明</p>
+</blockquote>
+<h1 id="目的">目的</h1>
+<p>nacos1.4版本单机模式的config模块长轮询的过程</p>
+<h1 id="client流程">client流程</h1>
+<p>有三种接入方式，分别为nacos-config-spring-boot-starter、spring-cloud-starter-alibaba-nacos-config、nacos-client。前两种是nacos-client的封装，根据身边使用情况来看，第二种方式用的更多，当前仅分析nacos-client的实现</p>
+<h2 id="客户端接入">客户端接入</h2>
+<p>pom依赖</p>
+<pre><code>&lt;dependency&gt;
+    &lt;groupId&gt;com.alibaba.nacos&lt;/groupId&gt;
+    &lt;artifactId&gt;nacos-client&lt;/artifactId&gt;
+    &lt;version&gt;1.4.3&lt;/version&gt;
+&lt;/dependency&gt;
+</code></pre>
+<p>测试代码</p>
+<pre><code>public static void main(String[] args) throws Exception {
+    ConfigService configService = NacosFactory.createConfigService(&quot;127.0.0.1:8848&quot;);
+    String configInfo = configService.getConfigAndSignListener(&quot;demo-data-id&quot;, &quot;DEFAULT_GROUP&quot;, 5000, new Listener() {
+        @Override
+        public Executor getExecutor() {
+            return null;
+        }
+
+        @Override
+        public void receiveConfigInfo(String configInfo) {
+            System.out.println(&quot;receive configInfo: =&gt; &quot; + configInfo);
+        }
+    });
+    System.out.println(&quot;init configInfo: =&gt; &quot; + configInfo);
+    for (int i=0; i&lt;1; i++) {
+        Thread.sleep(1000);
+    }
+    configService.shutDown();
+}
+</code></pre>
+<p>输出结果<br>
+服务启动输出：<code>init configInfo: =&gt; demo.name=hello,name</code><br>
+nacos修改配置后，输出：<code>receive configInfo: =&gt; demo.name=hello,new name</code></p>
+<p>核心逻辑主要是getConfigAndSignListener（同addListener)，及对应Listener的receiveConfigInfo方法，nacos-server触发配置更新时，回调并传回最新配置信息，至于该方法拿到配置信息能做什么，那就看我们想做什么了</p>
+<h2 id="关键类">关键类</h2>
+<h3 id="nacosconfigservice">NacosConfigService</h3>
+<p>客户端操作nacos-client-config的类，常用的操作有：获取最新配置信息、增加移除监听、发布和删除配置信息<br>
+常用的两种获取实例方式：</p>
+<pre><code>public static ConfigService createConfigService(Properties properties) throws NacosException {
+    return ConfigFactory.createConfigService(properties);
+}
+
+public static ConfigService createConfigService(String serverAddr) throws NacosException {
+    return ConfigFactory.createConfigService(serverAddr);
+}
+</code></pre>
+<h3 id="clientworker">ClientWorker</h3>
+<p>每个客户端实例内部存在一个ClientWorker单例对象，内部包含真正的配置信息同步逻辑</p>
+<h3 id="httpagent">HttpAgent</h3>
+<p>与nacos-server通信的代理类，封装接口交互相关的逻辑</p>
+<h3 id="cachedata">CacheData</h3>
+<p>dataId，group，namespace三个字段对应一个配置集主体，即对应一个CacheData，内部存储配置实体文本、配置校验md5等等。若一个客户端维护使用了多个配置集，也就是多个CacheData，会根据dataId，group，namespace生成key，存储到<code>ConcurrentHashMap&lt;String, CacheData&gt; cacheMap</code>，用于后续统一配置管理</p>
+<p><b>CacheData创建过程</b><br>
+<img src="https://voilaf.github.io/post-images/1647678704015.png" alt="" loading="lazy"></p>
+<h3 id="listener">Listener</h3>
+<p>每一个Listener对应绑定到一个CacheData，当一个CacheData的配置实体文本更新时，回调Listener使业务层感知并作出处理</p>
+<p><b>addListener</b><br>
+主要部分伪代码（此时本地</p>
+<pre><code>CacheData cache = addCacheDataIfAbsent(dataId, group, tenant);
+for (Listener listener : listeners) {
+    cache.addListener(listener);
+}
+</code></pre>
+<p>根据dataId, group, tenant获取或新增CacheData，并在CacheData内增加Listener</p>
+<p><b>getConfigAndSignListener</b><br>
+主要部分伪代码</p>
+<pre><code>// 请求nacos-server获取配置信息
+String content = getConfig(dataId, group, timeoutMs);
+
+......
+
+CacheData cache = addCacheDataIfAbsent(dataId, group, tenant);
+cache.setContent(content);
+for (Listener listener : listeners) {
+    cache.addListener(listener);
+}
+</code></pre>
+<h2 id="客户端长轮询">客户端长轮询</h2>
+<p>创建LongPollingRunnable线程，不断&quot;自旋&quot;重复执行</p>
+<p>请求判断指定配置集是否更新的接口头部参数说明：</p>
+<table>
+<thead>
+<tr>
+<th>请求头名</th>
+<th>含义</th>
+<th>示例值</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Listening-Configs</td>
+<td>指定配置集key</td>
+<td>demo-data-idDEFAULT_GROUP</td>
+</tr>
+<tr>
+<td>Long-Pulling-Timeout</td>
+<td>长轮询超时等待时间</td>
+<td>30000</td>
+</tr>
+<tr>
+<td>Long-Pulling-Timeout-No-Hangup</td>
+<td>长轮询时，无更新数据是否阻塞等待：&quot;true&quot;(不阻塞) &quot;fasle&quot;(阻塞)（新CacheData初始化时，值为true；默认情况值为false）</td>
+<td>&quot;true&quot;</td>
+</tr>
+</tbody>
+</table>
+<figure data-type="image" tabindex="1"><img src="https://voilaf.github.io/post-images/1647698371914.png" alt="" loading="lazy"></figure>
+<h1 id="server流程">server流程</h1>
+<p>主要部分</p>
+<h2 id="判断配置集是否更新">判断配置集是否更新</h2>
+<p>核心是AsyncContext，'hold'客户端的请求句柄上下文，释放WebServer内的线程；将请求上下文作为变量传递到业务运行线程，并等待一定时间执行，若这个时间内结束，该上下文未被响应文本内容，则按该配置集未更新操作；若中间过程配置被更新，通过中间的事件监听转发，DataChangeTask内获取该请求上下文并响应客户端该配置集已更新<br>
+<img src="https://voilaf.github.io/post-images/1647767443918.png" alt="" loading="lazy"></p>
+<h1 id="两种接入方式的自动刷新">两种接入方式的自动刷新</h1>
+<h2 id="nacos-config-spring-boot-starter">nacos-config-spring-boot-starter</h2>
+<pre><code>&lt;dependency&gt;
+    &lt;groupId&gt;com.alibaba.boot&lt;/groupId&gt;
+    &lt;artifactId&gt;nacos-config-spring-boot-starter&lt;/artifactId&gt;
+    &lt;version&gt;0.2.8&lt;/version&gt;
+&lt;/dependency&gt;
+</code></pre>
+<p>通常，我们对变量使用<code>@NacosValue</code>来注入配置值，若增加启动<code>autoRefreshed</code>(默认false关闭)，则实现配置的实时动态刷新，那么来找找解析的地方，定位两个问题</p>
+<ol>
+<li>NacosValue注解如何完成初次注入</li>
+<li>打开autoRreshed选项如何完成实时动态刷新</li>
+</ol>
+<h3 id="nacosvalue注解如何完成初次注入">NacosValue注解如何完成初次注入</h3>
+<p>Bean实例化完成后，会执行populateBean方法注入依赖项，针对BeanPostProcessor处理时，若为InstantiationAwareBeanPostProcessor类型，调用对应postProcessPropertyValues方法</p>
+<p><b>关于InstantiationAwareBeanPostProcessor</b><br>
+摘自 org.springframework.beans.factory.config.InstantiationAwareBeanPostProcessor 部分注释内容</p>
+<blockquote>
+<p>......，or to implement additional injection strategies such as field injection</p>
+</blockquote>
+<p>Autowired和Value注解对应属性注入，依赖AutowiredAnnotationBeanPostProcessor类，也是InstantiationAwareBeanPostProcessor的一种实现</p>
+<p>nacos对应InstantiationAwareBeanPostProcessor实现类：<b>NacosValueAnnotationBeanPostProcessor</b></p>
+<p>类结构图<br>
+<img src="https://voilaf.github.io/post-images/1647868288758.png" alt="" loading="lazy"></p>
+<p>指定解析注解类型为：NacosValue</p>
+<pre><code>public NacosValueAnnotationBeanPostProcessor() {
+    super(NacosValue.class);
+}
+</code></pre>
+<p><code>org.springframework.beans.factory.support.AbstractAutowireCapableBeanFactory#populateBean</code>调用<code>com.alibaba.spring.beans.factory.annotation.AbstractAnnotationBeanPostProcessor#postProcessPropertyValues</code>方法，查找当前Bean是否存在NacosValue注解的属性，针对注解元数据回调<code>com.alibaba.nacos.spring.context.annotation.config.NacosValueAnnotationBeanPostProcessor#doGetInjectedBean</code>获取对应的真实值，最后反射注入到Bean实例内的属性中</p>
+<p>总结来说，每个Bean实例化后调用populateBean方法注入依赖，InstantiationAwareBeanPostProcessor类型的BeanPostProcessor，扫描Bean内是否存在对应注解，并根据自定义方法获取其注解对应属性的真实值，最后通过反射注入</p>
+<h3 id="打开autorreshed选项如何完成实时动态刷新">打开autoRreshed选项如何完成实时动态刷新</h3>
+<p>聚焦<code>com.alibaba.nacos.spring.context.annotation.config.NacosValueAnnotationBeanPostProcessor#postProcessBeforeInitialization</code>，完成populateBean方法注入依赖后会触发。</p>
+<p>相关代码：<br>
+若NacosValue注解开启了autoRefreshed，会将Bean、属性、注解相关信息封装到NacosValueTarget类内，并存储到全局变量placeholderNacosValueTargetMap中</p>
+<pre><code>private void doWithAnnotation(String beanName, Object bean, NacosValue annotation,
+        int modifiers, Method method, Field field) {
+        ......
+        if (annotation.autoRefreshed()) {
+            String placeholder = resolvePlaceholder(annotation.value());
+
+            if (placeholder == null) {
+                return;
+            }
+
+            NacosValueTarget nacosValueTarget = new NacosValueTarget(bean, beanName,
+                    method, field, annotation.value());
+            put2ListMap(placeholderNacosValueTargetMap, placeholder,
+                    nacosValueTarget);
+        }
+    }
+}
+</code></pre>
+<p>nacos配置信息修改后触发事件监听，遍历placeholderNacosValueTargetMap内元素，查找是否存在对应老配置，最后反射注入</p>
+<pre><code>@Override
+public void onApplicationEvent(NacosConfigReceivedEvent event) {
+    // In to this event receiver, the environment has been updated the
+    // latest configuration information, pull directly from the environment
+    // fix issue #142
+    for (Map.Entry&lt;String, List&lt;NacosValueTarget&gt;&gt; entry : placeholderNacosValueTargetMap
+            .entrySet()) {
+        String key = environment.resolvePlaceholders(entry.getKey());
+        String newValue = environment.getProperty(key);
+
+        if (newValue == null) {
+            continue;
+        }
+        List&lt;NacosValueTarget&gt; beanPropertyList = entry.getValue();
+        for (NacosValueTarget target : beanPropertyList) {
+            String md5String = MD5Utils.md5Hex(newValue, &quot;UTF-8&quot;);
+            boolean isUpdate = !target.lastMD5.equals(md5String);
+            if (isUpdate) {
+                target.updateLastMD5(md5String);
+                Object evaluatedValue = resolveNotifyValue(target.nacosValueExpr, key, newValue);
+                if (target.method == null) {
+                    setField(target, evaluatedValue);
+                }
+                else {
+                    setMethod(target, evaluatedValue);
+                }
+            }
+        }
+    }
+}
+</code></pre>
+<h2 id="spring-cloud-starter-alibaba-nacos-config">spring-cloud-starter-alibaba-nacos-config</h2>
+<pre><code>&lt;dependency&gt;
+    &lt;groupId&gt;com.alibaba.cloud&lt;/groupId&gt;
+    &lt;artifactId&gt;spring-cloud-starter-alibaba-nacos-config&lt;/artifactId&gt;
+    &lt;version&gt;2.2.5.RELEASE&lt;/version&gt;
+&lt;/dependency&gt;
+</code></pre>
+<p>在SpringCloud内，对变量使用<code>@Value</code>注入配置值，对当前类使用<code>@RefreshScope</code>开启配置实时动态刷新</p>
+<p>同样来定位两个问题</p>
+<ol>
+<li>Value注解如何完成初次注入</li>
+<li>RefreshScope如何完成实时动态刷新</li>
+</ol>
+<h3 id="value注解如何完成初次注入">Value注解如何完成初次注入</h3>
+<p>聚焦<code>org.springframework.beans.factory.annotation.AutowiredAnnotationBeanPostProcessor#postProcessProperties</code>，核心步骤同NacosValue解析过程</p>
+<h3 id="refreshscope如何完成实时动态刷新">RefreshScope如何完成实时动态刷新</h3>
+<p>RefreshScope注解含义</p>
+<pre><code>@Target({ ElementType.TYPE, ElementType.METHOD })
+@Retention(RetentionPolicy.RUNTIME)
+@Scope(&quot;refresh&quot;)
+@Documented
+public @interface RefreshScope {
+	/**
+	 * @see Scope#proxyMode()
+	 * @return proxy mode
+	 */
+	ScopedProxyMode proxyMode() default ScopedProxyMode.TARGET_CLASS;
+}
+</code></pre>
+<p>我们知道，默认情况下Spring内部的Bean以singleton的scope注册，在<code>org.springframework.beans.factory.support.AbstractBeanFactory#doGetBean</code>内部创建Bean区分了三种情况，分别是singleton、prototype、others，设置RefreshScope注解的Bean，通过RefreshScope类来创建Bean</p>
+<p><b>配置更新逻辑</b><br>
+spring-cloud-starter-alibaba-nacos-config启动时，NacosConfigAutoConfiguration加载创建NacosContextRefresher，监听ApplicationReadyEvent事件</p>
+<p>ApplicationReadyEvent事件添加NacosConfigChangeListener，注册nacos配置更新监听</p>
+<p>配置更新时，发布RefreshEvent事件</p>
+<p>监听RefreshEvent处，将重置Environment环境，并清理RefreshScope内对应使用该配置的Bean，下次这些Bean被获取时将被重新创建</p>
+<pre><code>public synchronized Set&lt;String&gt; refresh() {
+    Set&lt;String&gt; keys = refreshEnvironment();
+    this.scope.refreshAll();
+    return keys;
+}
+</code></pre>
+<p>因此，修改配置前后分别返回以下控制器方法，会发现除了username值变动以外，Bean对应的地址也修改了</p>
+<pre><code>@RestController
+@RefreshScope
+public class IndexController {
+
+    @Value(&quot;${business.username:local}&quot;)
+    private String username;
+
+    @GetMapping(&quot;/index&quot;)
+    public String index() {
+        return username + &quot; | &quot; + this;
+    }
+}
+</code></pre>
+<h3 id="一个不经意可能会发生的问题">一个不经意可能会发生的问题</h3>
+<p>通过上述说明，基于spring-cloud-starter-alibaba-nacos-config包的配置动态刷新，会重建Bean实例</p>
+<p>通常，我们喜欢让类实现一些接口来做一些初始化操作，如InitializingBean、CommandLineRunner、ApplicationRunner等等。</p>
+<p><b>CommandLineRunner、ApplicationRunner触发点</b><br>
+org.springframework.boot.SpringApplication#run(java.lang.String...)`方法内，整个服务的生命周期里只会调用一次<br>
+<b>InitializingBean触发点</b><br>
+Bean实例化时调用，一旦涉及到Bean的重建，对应的afterPropertiesSet方法会被重复触发，若只是做一些固定的查询、赋值操作，那当然没问题，如果不小心在此处创建了守护线程等长生命周期的资源，将会导致资源浪费和业务异常</p>
+
+            </div>
+            
+            
+              <div class="next-post">
+                <div class="next">下一篇</div>
+                <a href="https://voilaf.github.io/post/try-with-resources-and-finally-binary-code/">
+                  <h3 class="post-title">
+                    try-with-resources and finally binary code
+                  </h3>
+                </a>
+              </div>
+            
+
+            
+
+          </div>
+
+        </div>
+      </div>
+    </div>
+
+    <script src="https://unpkg.com/aos@next/dist/aos.js"></script>
+<script type="application/javascript">
+
+AOS.init();
+
+var app = new Vue({
+  el: '#app',
+  data: {
+    menuVisible: false,
+  },
+})
+
+</script>
+
+
+
+
+
+
+  </body>
+</html>
