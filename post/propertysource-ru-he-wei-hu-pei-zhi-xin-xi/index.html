@@ -1,0 +1,339 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="utf-8" >
+
+<title>PropertySource如何维护配置信息 | voilaf</title>
+
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+
+<link rel="stylesheet" href="https://use.fontawesome.com/releases/v5.7.2/css/all.css" integrity="sha384-fnmOCqbTlWIlj8LyTjo7mOUStjsKC4pOpQbqyi7RrhN7udi9RwhKkMHpvLbHG9Sr" crossorigin="anonymous">
+<link rel="shortcut icon" href="https://voilaf.github.io/favicon.ico?v=1648043452561">
+<link rel="stylesheet" href="https://voilaf.github.io/styles/main.css">
+
+
+
+<link rel="stylesheet" href="https://unpkg.com/aos@next/dist/aos.css" />
+<script src="https://cdn.jsdelivr.net/npm/vue/dist/vue.js"></script>
+
+
+
+    <meta name="description" content="
+目的
+版本
+过程分析
+
+关键 class 和  interface
+
+PropertySource
+AbstractEnvironment对应属性
+ConfigurationPropertySourcesPropertySource
+
+
+..." />
+    <meta name="keywords" content="" />
+  </head>
+  <body>
+    <div id="app" class="main">
+
+      <div class="sidebar" :class="{ 'full-height': menuVisible }">
+  <div class="top-container" data-aos="fade-right">
+    <div class="top-header-container">
+      <a class="site-title-container" href="https://voilaf.github.io">
+        <img src="https://voilaf.github.io/images/avatar.png?v=1648043452561" class="site-logo">
+        <h1 class="site-title">voilaf</h1>
+      </a>
+      <div class="menu-btn" @click="menuVisible = !menuVisible">
+        <div class="line"></div>
+      </div>
+    </div>
+    <div>
+      
+        
+          <a href="https://voilaf.github.io" class="site-nav">
+            首页
+          </a>
+        
+      
+    </div>
+  </div>
+  <div class="bottom-container" data-aos="flip-up" data-aos-offset="0">
+    <div class="social-container">
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+    </div>
+    <div class="site-description">
+      hhh
+    </div>
+    <div class="site-footer">
+      Powered by <a href="https://github.com/getgridea/gridea" target="_blank">Gridea</a> | <a class="rss" href="https://voilaf.github.io/atom.xml" target="_blank">RSS</a>
+    </div>
+  </div>
+</div>
+
+
+      <div class="main-container">
+        <div class="content-container" data-aos="fade-up">
+          <div class="post-detail">
+            <h2 class="post-title">PropertySource如何维护配置信息</h2>
+            <div class="post-date">2022-03-21</div>
+            
+            <div class="post-content" v-pre>
+              <p><ul class="markdownIt-TOC">
+<li><a href="#%E7%9B%AE%E7%9A%84">目的</a></li>
+<li><a href="#%E7%89%88%E6%9C%AC">版本</a></li>
+<li><a href="#%E8%BF%87%E7%A8%8B%E5%88%86%E6%9E%90">过程分析</a>
+<ul>
+<li><a href="#%E5%85%B3%E9%94%AE-class-%E5%92%8C-interface">关键 class 和  interface</a>
+<ul>
+<li><a href="#propertysource">PropertySource</a></li>
+<li><a href="#abstractenvironment%E5%AF%B9%E5%BA%94%E5%B1%9E%E6%80%A7">AbstractEnvironment对应属性</a></li>
+<li><a href="#configurationpropertysourcespropertysource">ConfigurationPropertySourcesPropertySource</a></li>
+</ul>
+</li>
+<li><a href="#%E6%80%8E%E4%B9%88%E5%8F%96">怎么取</a></li>
+<li><a href="#%E6%80%8E%E4%B9%88%E5%AD%98">怎么存</a></li>
+</ul>
+</li>
+<li><a href="#faq">FAQ</a>
+<ul>
+<li><a href="#springboot%E4%B8%ADvalue%E6%B3%A8%E8%A7%A3%E6%B3%A8%E5%85%A5%E7%9A%84%E5%80%BC%E4%BB%8E%E4%BD%95%E6%9D%A5">Springboot中Value注解注入的值从何来</a></li>
+<li><a href="#%E8%AF%BB%E5%8F%96%E9%85%8D%E7%BD%AE%E4%BC%98%E5%85%88%E7%BA%A7%E8%A7%84%E5%88%99">读取配置优先级规则</a></li>
+<li><a href="#%E5%B8%B8%E8%A7%81propertysource%E7%B1%BB">常见PropertySource类</a></li>
+<li><a href="#addfirst%E5%92%8Caddlast%E7%9A%84%E5%8C%BA%E5%88%AB">addFirst和addLast的区别</a></li>
+</ul>
+</li>
+</ul>
+</p>
+<h1 id="目的">目的</h1>
+<p>springboot中配置信息如何通过PropertySource、MutablePropertySources、ConfigurationPropertySourcesPropertySource等相关类进行维护</p>
+<h1 id="版本">版本</h1>
+<p>spring-boot-version: 2.3.2.RELEASE</p>
+<h1 id="过程分析">过程分析</h1>
+<h2 id="关键-class-和-interface">关键 class 和  interface</h2>
+<h3 id="propertysource">PropertySource</h3>
+<pre><code>public abstract class PropertySource&lt;T&gt; {
+    protected final String name;
+	protected final T source;
+}
+</code></pre>
+<blockquote>
+<p>Abstract base class representing a source of name/value property pairs. The underlying source object may be of any type T that encapsulates properties. Examples include java.util.Properties objects, java.util.Map objects, ServletContext and ServletConfig objects (for access to init parameters).</p>
+</blockquote>
+<p>在Spring中以PropertySource作为一个单元，存储一个配置集。比如环境变量是一个PropertySource，命令行参数是一个PropertySource，application.properties是一个PropertySource等等<br>
+<code>name</code>指代配置集的名词，source以泛型实现类型存储任意类型的真实配置信息（如Map）</p>
+<h3 id="abstractenvironment对应属性">AbstractEnvironment对应属性</h3>
+<pre><code>public abstract class AbstractEnvironment implements ConfigurableEnvironment {
+    private final MutablePropertySources propertySources = new MutablePropertySources();
+
+	private final ConfigurablePropertyResolver propertyResolver =
+			new PropertySourcesPropertyResolver(this.propertySources);
+}
+</code></pre>
+<p>Spring项目启动一定会创建一个Environment，即使依赖包不一样，StandardEnvironment、StandardServletEnvironment、StandardReactiveWebEnvironment，但都继承自AbstractEnvironment，AbstractEnvironment内包含<code>propertySources</code>和<code>propertyResolver</code>属性，这就是配置信息存储和解析的地方</p>
+<pre><code>public class MutablePropertySources implements PropertySources {
+    private final List&lt;PropertySource&lt;?&gt;&gt; propertySourceList = new CopyOnWriteArrayList&lt;&gt;();
+}
+</code></pre>
+<blockquote>
+<p>The default implementation of the PropertySources interface. Allows manipulation of contained property sources and provides a constructor for copying an existing PropertySources instance.<br>
+Where precedence is mentioned in methods such as addFirst and addLast, this is with regard to the order in which property sources will be searched when resolving a given property with a PropertyResolver.</p>
+</blockquote>
+<pre><code>public class PropertySourcesPropertyResolver extends AbstractPropertyResolver {
+	private final PropertySources propertySources;
+}
+</code></pre>
+<blockquote>
+<p>PropertyResolver implementation that resolves property values against an underlying set of PropertySources.</p>
+</blockquote>
+<p>结合以上两个类和各自的属性一起看，MutablePropertySources的<code>propertySourceList</code>存储多个PropertySource，即所有的配置集合。而PropertySourcesPropertyResolver持有MutablePropertySources变量的引用，也就间接持有了所有配置集的引用。</p>
+<p>观察PropertySourcesPropertyResolver内部的方法，会发现真实获取配置信息的位置就在此处，同样的，在使用中，我们常通过<code>${config_name:default_value}</code>占位符来获取真正的数据，PropertySourcesPropertyResolver除了遍历PropertySources外，第二个作用就是解析变量替换占位符</p>
+<h3 id="configurationpropertysourcespropertysource">ConfigurationPropertySourcesPropertySource</h3>
+<pre><code>class ConfigurationPropertySourcesPropertySource extends PropertySource&lt;Iterable&lt;ConfigurationPropertySource&gt;&gt;
+		implements OriginLookup&lt;String&gt; {}
+</code></pre>
+<blockquote>
+<p>PropertySource that exposes ConfigurationPropertySource instances so that they can be used with a PropertyResolver or added to the Environment.</p>
+</blockquote>
+<p><code>name</code>: configurationProperties<br>
+<code>source</code>: class SpringConfigurationPropertySources</p>
+<p>source内存储了其他所有的PropertySource，当前PropertySource优先级最高，调用getProperty方法获取属性值时，会循环SpringConfigurationPropertySources内的每一个PropertySource封装ConfigurationPropertySource</p>
+<p>至于为什么做还不太明白，另外Springboot的Binder相关操作是基于ConfigurationPropertySource的，也许是为了逻辑的共用？</p>
+<h2 id="怎么取">怎么取</h2>
+<pre><code>(ConfigurableEnvironment) applicationContext.getEnvironment().getProperty(&quot;xxx.xxx&quot;);
+</code></pre>
+<figure data-type="image" tabindex="1"><img src="https://voilaf.github.io/post-images/1648040578352.png" alt="" loading="lazy"></figure>
+<h2 id="怎么存">怎么存</h2>
+<pre><code>ConfigurableEnvironment environment = (ConfigurableEnvironment) applicationContext.getEnvironment();
+
+String myPropertySourceName = &quot;myPropertySource&quot;;
+Map&lt;String, Object&gt; myPropertySourceMap = new HashMap&lt;&gt;();
+myPropertySourceMap.put(&quot;my.username&quot;, &quot;test&quot;);
+MapPropertySource mapPropertySource = new MapPropertySource(myPropertySourceName, myPropertySourceMap);
+
+environment.getPropertySources().addFirst(mapPropertySource);
+
+System.out.println(environment.getProperty(&quot;my.username&quot;));
+
+// 输出：test
+</code></pre>
+<ol>
+<li>创新自定义的MapPropertySource，需指定PropertySource的名称和source对应的Map</li>
+<li>添加到Environment内的PropertySources内，addFirst、addLast等等方法都可以使用，区分优先级</li>
+</ol>
+<h1 id="faq">FAQ</h1>
+<h2 id="springboot中value注解注入的值从何来">Springboot中Value注解注入的值从何来</h2>
+<p>使用Value注解的Bean实例化过程中，会调用<code>org.springframework.beans.factory.annotation.AutowiredAnnotationBeanPostProcessor#postProcessProperties</code>方法完成Value和Autowired注解属性变量的注入</p>
+<pre><code>@Override
+public PropertyValues postProcessProperties(PropertyValues pvs, Object bean, String beanName) {
+    // 查找当前Bean内Value和Autowired注解信息
+    InjectionMetadata metadata = findAutowiringMetadata(beanName, bean.getClass(), pvs);
+    ......
+        // 根据注解信息，解析对应值，通过反射注入到Bean内
+        metadata.inject(bean, beanName, pvs);
+    .......
+}
+</code></pre>
+<h2 id="读取配置优先级规则">读取配置优先级规则</h2>
+<p>根据ProperSources实现类MutablePropertySources的<code>propertySourceList</code>列表中的元素位置，配置集的优先级越高，对应在列表中的下标越小</p>
+<h2 id="常见propertysource类">常见PropertySource类</h2>
+<table>
+<thead>
+<tr>
+<th>PropertySource类名</th>
+<th>name</th>
+<th>source</th>
+<th>添加位置</th>
+<th>说明</th>
+<th>优先级（1最大，2次之，类比）</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>ConfigurationPropertySourcesPropertySource</td>
+<td>configurationProperties</td>
+<td>SpringConfigurationPropertySources</td>
+<td>org.springframework.boot.context.properties.source.ConfigurationPropertySources#attach</td>
+<td>内部存储其他的PropertySource</td>
+<td>1</td>
+</tr>
+<tr>
+<td>StubPropertySource</td>
+<td>servletConfigInitParams</td>
+<td>Object</td>
+<td>org.springframework.web.context.support.StandardServletEnvironment#customizePropertySources</td>
+<td></td>
+<td>2</td>
+</tr>
+<tr>
+<td>StubPropertySource</td>
+<td>servletContextInitParams</td>
+<td>Object</td>
+<td>org.springframework.web.context.support.StandardServletEnvironment#customizePropertySources</td>
+<td></td>
+<td>3</td>
+</tr>
+<tr>
+<td>PropertiesPropertySource</td>
+<td>systemProperties</td>
+<td>Properties</td>
+<td>org.springframework.core.env.StandardEnvironment#customizePropertySources</td>
+<td>系统配置</td>
+<td>4</td>
+</tr>
+<tr>
+<td>OriginAwareSystemEnvironmentPropertySource</td>
+<td>systemEnvironment</td>
+<td>Map&lt;String, Object&gt;</td>
+<td>org.springframework.core.env.StandardEnvironment#customizePropertySources</td>
+<td>系统变量</td>
+<td>5</td>
+</tr>
+<tr>
+<td>RandomValuePropertySource</td>
+<td>random</td>
+<td>Random</td>
+<td></td>
+<td>随机数获取</td>
+<td>6</td>
+</tr>
+<tr>
+<td>OriginTrackedMapPropertySource</td>
+<td>applicationConfig: [classpath:/application.properties]</td>
+<td>Map&lt;String, Object&gt;</td>
+<td>org.springframework.boot.context.config.ConfigFileApplicationListener#postProcessEnvironment</td>
+<td>application.properties</td>
+<td>7</td>
+</tr>
+</tbody>
+</table>
+<h2 id="addfirst和addlast的区别">addFirst和addLast的区别</h2>
+<pre><code>// Add the given property source object with highest precedence
+public void addFirst(PropertySource&lt;?&gt; propertySource) {
+    synchronized (this.propertySourceList) {
+        removeIfPresent(propertySource);
+        this.propertySourceList.add(0, propertySource);
+    }
+}
+
+// Add the given property source object with lowest precedence.
+public void addLast(PropertySource&lt;?&gt; propertySource) {
+    synchronized (this.propertySourceList) {
+        removeIfPresent(propertySource);
+        this.propertySourceList.add(propertySource);
+    }
+}
+</code></pre>
+<p>添加到propertySourceList列表的下标不同，一前一后</p>
+
+            </div>
+            
+            
+              <div class="next-post">
+                <div class="next">下一篇</div>
+                <a href="https://voilaf.github.io/post/nacos-config-14x-chang-lun-xun/">
+                  <h3 class="post-title">
+                    nacos-config-1.4.x长轮询
+                  </h3>
+                </a>
+              </div>
+            
+
+            
+
+          </div>
+
+        </div>
+      </div>
+    </div>
+
+    <script src="https://unpkg.com/aos@next/dist/aos.js"></script>
+<script type="application/javascript">
+
+AOS.init();
+
+var app = new Vue({
+  el: '#app',
+  data: {
+    menuVisible: false,
+  },
+})
+
+</script>
+
+
+
+
+
+
+  </body>
+</html>
